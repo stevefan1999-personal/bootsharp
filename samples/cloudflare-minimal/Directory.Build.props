@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <!-- Host SDK has a broken workload set (10.0.109.1). LLVM does not need wasm-tools. -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <_DotNetRoot Condition="'$(_DotNetRoot)' == ''">$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))))</_DotNetRoot>
+    <_EmscriptenPackVersion>10.0.9</_EmscriptenPackVersion>
+    <_EmscriptenSdk Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenSdk>
+    <_EmscriptenNode Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenNode>
+    <_EmscriptenCache Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenCache>
+  </PropertyGroup>
+  <Import Project="$(_EmscriptenSdk)" Condition="'$(_EmscriptenSdk)' != ''" />
+  <Import Project="$(_EmscriptenNode)" Condition="'$(_EmscriptenNode)' != ''" />
+  <Import Project="$(_EmscriptenCache)" Condition="'$(_EmscriptenCache)' != ''" />
+</Project>
