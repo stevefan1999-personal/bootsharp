@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Cloudflare.Workers.Generator.Tests</RootNamespace>
+        <!-- The suite never links the wasm backend; the sample's Emscripten props stay inert here. -->
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Plain library reference, not OutputItemType="Analyzer": the driver instantiates the
+             generator itself, so the tests need its types on the compile-time reference path. -->
+        <ProjectReference Include="../generator/Cloudflare.Workers.Generator.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Must track the generator's Roslyn version: it marks the package PrivateAssets="all". -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The emitted dispatch calls the hand-written half of ActorRuntime by name. Embedding the
+             real file (rather than copying its text) makes the drift guard fail the build if the
+             backend moves it, instead of silently checking nothing. -->
+        <EmbeddedResource Include="../backend/ActorRuntime.cs" LogicalName="Backend.ActorRuntime.cs" />
+    </ItemGroup>
+
+</Project>
