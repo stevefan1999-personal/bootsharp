@@ -33,7 +33,7 @@ public sealed class GenerateJS : Microsoft.Build.Utilities.Task
     {
         var inspector = new SolutionInspector(Log);
         var inspected = ResolveInspectedFiles();
-        return inspector.Inspect(inspected);
+        return inspector.Inspect(InspectedDirectory, inspected);
 
         IEnumerable<string> ResolveInspectedFiles ()
         {

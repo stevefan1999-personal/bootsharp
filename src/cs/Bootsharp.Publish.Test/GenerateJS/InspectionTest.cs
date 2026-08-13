@@ -27,6 +27,39 @@ public class InspectionTest : GenerateJSTest
     }
 
     [Fact]
+    public void ResolvesDependenciesFromInspectedDirectory ()
+    {
+        // Dependencies excluded from inspection (Microsoft.*) are still required to inspect
+        // the user assemblies referencing them, and the MSBuild host doesn't have them loaded.
+        AddAssembly("Microsoft.Mock.Dependency.dll",
+            With("Microsoft.Mock.Dependency", "public class Payload { public string Value { get; set; } = \"\"; }")
+        );
+        AddAssembly("foo.dll",
+            WithClass("Foo", "[Export] public static Microsoft.Mock.Dependency.Payload Get () => null!;")
+        );
+        Execute();
+        Assert.DoesNotContain(Engine.Warnings, w => w.Contains("Failed to inspect"));
+        Contains("foo.g.mjs", "get");
+    }
+
+    [Fact]
+    public void WarnsAndSkipsTypeWithUnresolvableDependency ()
+    {
+        AddAssembly("Microsoft.Mock.Dependency.dll",
+            With("Microsoft.Mock.Dependency", "public class Payload;")
+        );
+        AddAssembly("foo.dll",
+            WithClass("Good", "[Export] public static void Inv () {}"),
+            WithClass("Bad", "[Export] public static Microsoft.Mock.Dependency.Payload Get () => null!;")
+        );
+        File.Delete(Path.Combine(Project.Root, "Microsoft.Mock.Dependency.dll"));
+        Execute();
+        Assert.Contains(Engine.Warnings, w => w.Contains("Failed to inspect 'Bad.Class' type"));
+        Assert.True(File.Exists($"{Task.BuildDirectory}/generated/modules/good.g.mjs"));
+        Assert.False(File.Exists($"{Task.BuildDirectory}/generated/modules/bad.g.mjs"));
+    }
+
+    [Fact]
     public void WarnsWhenMissingSpecializationPair ()
     {
         AddAssembly(With(

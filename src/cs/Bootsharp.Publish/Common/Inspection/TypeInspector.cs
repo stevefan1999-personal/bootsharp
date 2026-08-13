@@ -12,22 +12,23 @@ internal sealed class TypeInspector
     private readonly HashSet<Type> inspectedModuleTypes = [];
     private readonly List<SurfaceMeta> surfaces = [];
     private readonly SerializedInspector srd;
+    private readonly Action<string, Exception> warn;
 
-    public TypeInspector ()
+    /// <param name="warn">Invoked with the description of a subject that couldn't be inspected.</param>
+    public TypeInspector (Action<string, Exception> warn)
     {
+        this.warn = warn;
         srd = new SerializedInspector(InspectInstance);
     }
 
     public void Inspect (Assembly assembly)
     {
-        foreach (var type in assembly.GetExportedTypes())
-            if (InspectStatic(type) is { } st)
-                surfaces.Add(st);
+        foreach (var type in GetLoadableTypes(assembly))
+            InspectSurface(type, InspectStatic);
         foreach (var attr in assembly.CustomAttributes)
             if (ResolveIK(attr) is { } ik)
                 foreach (var arg in (IEnumerable<CustomAttributeTypedArgument>)attr.ConstructorArguments[0].Value!)
-                    if (InspectModule((Type)arg.Value!, ik) is { } md)
-                        surfaces.Add(md);
+                    InspectSurface((Type)arg.Value!, type => InspectModule(type, ik));
     }
 
     public IReadOnlyCollection<TypeMeta> Collect ()
@@ -37,6 +38,32 @@ internal sealed class TypeInspector
         OverloadDisambiguator.Disambiguate(types);
         var clrs = types.Select(t => t.Clr).ToHashSet();
         return Preferences.Rename([..types, ..crawled.Values.Where(c => !clrs.Contains(c.Clr))]);
+    }
+
+    /// <remarks>
+    /// A type whose signature touches an assembly missing from the inspected closure throws when its
+    /// members are resolved; skipping just that type keeps the rest of the solution — and the publish
+    /// that hosts this inspection — working, at the cost of the interop surface it would've contributed.
+    /// </remarks>
+    private void InspectSurface (Type type, Func<Type, SurfaceMeta?> inspect)
+    {
+        try { if (inspect(type) is { } srf) surfaces.Add(srf); }
+        catch (Exception e) { warn($"'{type}' type", e); }
+    }
+
+    /// <remarks>
+    /// Enumerating exported types is all-or-nothing: a type whose base, interface or attribute lives in
+    /// an assembly missing from the inspected closure aborts the entire assembly. Degrade to the types
+    /// that did load instead, for the same reason <see cref="InspectSurface"/> skips individual types.
+    /// </remarks>
+    private Type[] GetLoadableTypes (Assembly assembly)
+    {
+        try { return assembly.GetExportedTypes(); }
+        catch (ReflectionTypeLoadException e)
+        {
+            warn($"types of '{assembly.GetName().Name}' assembly", e);
+            return e.Types.OfType<Type>().Where(t => t.IsVisible).ToArray();
+        }
     }
 
     private StaticMeta? InspectStatic (Type type)
@@ -225,11 +252,11 @@ internal sealed class TypeInspector
             foreach (var compatible in FindCompatible(type))
                 InspectType(compatible, ik, nul);
 
-        static IEnumerable<Type> FindCompatible (Type param)
+        IEnumerable<Type> FindCompatible (Type param)
         {
             foreach (var ct in param.GetGenericParameterConstraints().Where(IsUserType))
             foreach (var ass in AssemblyLoadContext.GetLoadContext(ct.Assembly)!.Assemblies)
-            foreach (var clr in ass.GetExportedTypes())
+            foreach (var clr in GetLoadableTypes(ass))
                 if (IsUserType(clr) && !clr.IsAbstract && !clr.ContainsGenericParameters && ct.IsAssignableFrom(clr))
                     yield return clr;
         }

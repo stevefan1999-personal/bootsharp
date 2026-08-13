@@ -25,7 +25,7 @@ public sealed class GenerateCS : Microsoft.Build.Utilities.Task
     {
         var inspector = new SolutionInspector(Log);
         var inspected = Directory.GetFiles(InspectedDirectory, "*.dll").Order();
-        return inspector.Inspect(inspected);
+        return inspector.Inspect(InspectedDirectory, inspected);
     }
 
     private void GenerateSerializer (SolutionInspection spec)
