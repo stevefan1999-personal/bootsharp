@@ -1,14 +1,18 @@
 using Bootsharp;
+using Bootsharp.Cloudflare.Logging;
 using Bootsharp.Inject;
 using Cloudflare.Backend;
 using Cloudflare.Backend.Hosting;
-using Cloudflare.Backend.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 [assembly: Export(typeof(IWorker), typeof(IActorRuntime))]
 [assembly: Import(typeof(ILogSink))]
+// Routes answered straight from the ASSETS binding, before.NET is booted. Declared once, here:
+// the emitted worker module is the only consumer, so the app never restates the predicate
+//. "/app" is the Blazor frontend, the rest are what it loads.
+[assembly: WorkerAssets("/app", "/_framework", "/css", "/favicon.ico")]
 
 var holder = new AppHolder();
 var builder = WebApplication.CreateSlimBuilder();

@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Bootsharp.Cloudflare.Generate.Tests</RootNamespace>
+        <!-- The suite never links the wasm backend; the sample's Emscripten props stay inert here. -->
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Plain library reference, not OutputItemType="Analyzer": the driver instantiates the
+             generator itself, so the tests need its types on the compile-time reference path. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj" />
+        <!-- The other half of the pipeline: the suite runs the publish task's projector and ESM
+             emitter over the assembly the generator run produced, so both halves are covered by
+             the same assertions and cannot drift apart unnoticed. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Must track the generator's Roslyn version: it marks the package PrivateAssets="all". -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+        <PackageReference Include="xunit" Version="2.9.3" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The emitted dispatch calls the runtime helpers by name. Embedding the real file (rather
+             than copying its text) makes the drift guard fail the build if Bootsharp.Cloudflare
+             moves them, instead of silently checking nothing. -->
+        <EmbeddedResource Include="../../../src/cs/Bootsharp.Cloudflare/Entrypoints/ActorRuntimeBase.cs"
+                          LogicalName="Bootsharp.Cloudflare.ActorRuntimeBase.cs" />
+        <!-- Same guard for the ESM half: the emitted module imports these helpers by name from the
+             packaged asset, and an import of something the asset stopped exporting is a runtime
+             failure the checker cannot see (the asset is JavaScript). -->
+        <EmbeddedResource Include="../../../src/cs/Bootsharp.Cloudflare/js/runtime.mjs"
+                          LogicalName="Bootsharp.Cloudflare.runtime.mjs" />
+    </ItemGroup>
+
+</Project>

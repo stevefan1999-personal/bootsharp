@@ -23,14 +23,29 @@
         <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <OptimizationPreference>Size</OptimizationPreference>
-        <CloudflareJsOutputDir>$(MSBuildProjectDirectory)/../worker/src/generated</CloudflareJsOutputDir>
-        <CloudflareWasmImport>../../../dist/wasm/backend.wasm</CloudflareWasmImport>
+        <!-- The worker module and the runtime assets it imports are publish output, so they land
+             next to the other publish output rather than in the source tree (ADR-0006 §1).
+             wrangler.jsonc `main` points here; `npm run dev`/`deploy` publish before invoking it. -->
+        <BsCfWorkerDirectory>$(MSBuildProjectDirectory)/../dist/worker</BsCfWorkerDirectory>
+        <!-- In a consuming app the package's build/ targets find the task under its own tasks/
+             folder. The sample references the library by project, which carries no package layout,
+             so it points the registration at the task's build output instead. -->
+        <BsCfTaskAssembly>$(MSBuildProjectDirectory)/../../../src/cs/Bootsharp.Cloudflare.Publish/bin/$(Configuration)/net10.0/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
     </PropertyGroup>
 
     <ItemGroup>
-        <CompilerVisibleProperty Include="CloudflareJsOutputDir" />
-        <CompilerVisibleProperty Include="CloudflareWasmImport" />
-        <ProjectReference Include="../generator/Cloudflare.Workers.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <!-- Referencing across the sample tree's boundary means this project's Directory.Build.props
+             no longer reaches the library: restore and build need /p:MSBuildEnableWorkloadResolver=false
+             on the command line, which is why every documented sample command passes it. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj" />
+        <!-- The analyzer ships inside the Bootsharp.Cloudflare package; referenced separately here
+             because a ProjectReference carries no analyzers/ payload. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <!-- Likewise for the publish task, which the package would carry under tasks/: referenced
+             only so it is built before BootsharpCloudflareWorker runs it. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj"
+                          ReferenceOutputAssembly="false" />
     </ItemGroup>
 
     <ItemGroup>
@@ -47,5 +62,9 @@
         <TrimmerRootType Include="FreeSql.Custom.CustomProvider`1" />
         <TrimmerRootType Include="Cloudflare.Backend.Data.FreeSqlNote" />
     </ItemGroup>
+
+    <!-- A PackageReference would import this from the package's build/ folder automatically; a
+         ProjectReference carries no such payload, so the sample imports it by hand. -->
+    <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />
 
 </Project>

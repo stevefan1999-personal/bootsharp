@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bootsharp-cloudflare",
-  "main": "worker/src/generated/entrypoints.ts",
+  // Emitted by `dotnet publish` (the Bootsharp.Cloudflare publish task), next to the wasm and the
+  // Bootsharp ES modules it imports. `npm run dev` and `npm run deploy` publish first.
+  "main": "dist/worker/entrypoints.ts",
   "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "bb69253f02c5edc7125c285387b47388",

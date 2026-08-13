@@ -171,7 +171,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
         {
             Runtime = ".NET " + Environment.Version,
             Host = "cloudflare-workers",
-            WorkersTypes = Cloudflare.Workers.WorkersTypes.Version,
+            WorkersTypes = WorkersTypes.Version,
             KvValue = kvValue,
             D1Rows = d1,
             R2Objects = r2List,

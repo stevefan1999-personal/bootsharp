@@ -8,8 +8,8 @@
     "dev": "npm run publish:cs && npm run publish:frontend && wrangler dev",
     "deploy": "npm run publish:cs && npm run publish:frontend && wrangler deploy",
     "types": "wrangler types",
-    "check:ts": "tsc --noEmit -p tsconfig.json",
-    "test:generator": "dotnet test generator.tests/Cloudflare.Workers.Generator.Tests.csproj"
+    "check:ts": "npm run types && tsc --noEmit -p tsconfig.json",
+    "test:generator": "dotnet test generator.tests/Bootsharp.Cloudflare.Generate.Tests.csproj /p:MSBuildEnableWorkloadResolver=false"
   },
   "devDependencies": {
     "wrangler": "^4.122.0",

@@ -1,0 +1,8 @@
+# Written into the sample root by `wrangler check startup`, which the README documents.
+worker-startup.cpuprofile
+
+# Projected from wrangler.jsonc by `wrangler types`, and from the emitted worker module for the
+# Durable Object / Workflow types — i.e. generated from two things that already live here, one of
+# which is itself build output. Tracking it only let it go stale silently when the emitted module
+# moved; `npm run check:ts` regenerates it first.
+worker-configuration.d.ts

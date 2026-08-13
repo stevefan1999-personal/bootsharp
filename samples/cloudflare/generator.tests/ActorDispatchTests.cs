@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Xunit;
 
-namespace Cloudflare.Workers.Generator.Tests;
+namespace Bootsharp.Cloudflare.Generate.Tests;
 
 /// <summary>
 /// every public member of an actor either gets dispatch that compiles, or a diagnostic.
@@ -10,17 +10,17 @@ namespace Cloudflare.Workers.Generator.Tests;
 /// </summary>
 public class ActorDispatchTests
 {
-    /// <summary>Runtime helpers the emitted dispatch is allowed to call on the hand-written half.</summary>
+    /// <summary>Runtime helpers the emitted dispatch is allowed to call on the packaged base.</summary>
     private static readonly Regex runtimeHelpers =
         new(@"(?<![\w.])(?<name>Arg[A-Za-z]*|Json[A-Za-z]*|ReadArgs|HasArg|Track|GetActor)\(", RegexOptions.Compiled);
 
     [Fact]
     public void ActorOutsideTheBackendNamespaceGetsCompilableDispatchThatParsesArguments()
     {
-        var run = GeneratorHarness.Run(TestSources.CounterActor);
+        var run = GeneratorHarness.RunActors(TestSources.CounterActor);
         Assert.Empty(run.DefectIds);
         Assert.Equal("no errors", run.ErrorReport);
-        // The switch lives in Cloudflare.Backend, so the actor must be named across namespaces.
+        // The switch lives next to the app's env interface, so the actor is named across namespaces.
         Assert.Contains("case global::Sample.Actors.Counter counterActor:", run.GeneratedCs);
         Assert.Contains("var args = ReadArgs(argsJson);", run.GeneratedCs);
         Assert.Contains("case \"total\": return JsonInt(counterActor.Total());", run.GeneratedCs);
@@ -31,7 +31,7 @@ public class ActorDispatchTests
     [Fact]
     public void EverySupportedShapeCompilesAndOptionalArgumentsFallBackToTheirDefault()
     {
-        var run = GeneratorHarness.Run(TestSources.LedgerActor);
+        var run = GeneratorHarness.RunActors(TestSources.LedgerActor);
         Assert.Empty(run.DefectIds);
         Assert.Equal("no errors", run.ErrorReport);
         Assert.Contains("case \"reset\":", run.GeneratedCs);
@@ -42,20 +42,20 @@ public class ActorDispatchTests
 
     /// <summary>
     /// The mirror of the runtime the other tests compile against is only worth something while it
-    /// matches the backend, so the emitted calls are checked against the real file.
+    /// matches the package, so the emitted calls are checked against the real file.
     /// </summary>
     [Fact]
-    public void EmittedDispatchOnlyCallsRuntimeHelpersTheBackendDeclares()
+    public void EmittedDispatchOnlyCallsRuntimeHelpersThePackagedBaseDeclares()
     {
-        var run = GeneratorHarness.Run(TestSources.LedgerActor, TestSources.CounterActor);
+        var run = GeneratorHarness.RunActors(TestSources.LedgerActor, TestSources.CounterActor);
         var called = runtimeHelpers.Matches(run.GeneratedCs)
             .Select(match => match.Groups["name"].Value)
             .Distinct();
-        var backend = GeneratorHarness.BackendRuntime;
+        var packaged = GeneratorHarness.PackagedRuntime;
         Assert.NotEmpty(called);
         foreach (var helper in called)
-            Assert.True(backend.Contains($" {helper}("),
-                $"backend/ActorRuntime.cs no longer declares '{helper}', which the emitted dispatch calls.");
+            Assert.True(packaged.Contains($" {helper}("),
+                $"ActorRuntimeBase no longer declares '{helper}', which the emitted dispatch calls.");
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public class ActorDispatchTests
     [Fact]
     public void UnsupportedRpcReturnTypeIsDiagnosedAndLeavesTheRestOfTheActorIntact()
     {
-        var run = GeneratorHarness.Run(TestSources.UnsupportedReturnActor);
+        var run = GeneratorHarness.RunActors(TestSources.UnsupportedReturnActor);
         Assert.Equal(["CFW011"], run.DefectIds);
         Assert.Contains("Task<Sample.Actors.Snapshot>", run.Defects.Single().GetMessage());
         Assert.Equal("no errors", run.ErrorReport);
@@ -77,7 +77,7 @@ public class ActorDispatchTests
     [Fact]
     public void UnsupportedRpcParameterTypeIsDiagnosedAndNotEmitted()
     {
-        var run = GeneratorHarness.Run(TestSources.UnsupportedParameterActor);
+        var run = GeneratorHarness.RunActors(TestSources.UnsupportedParameterActor);
         Assert.Equal(["CFW010"], run.DefectIds);
         Assert.Contains("payload", run.Defects.Single().GetMessage());
         Assert.Equal("no errors", run.ErrorReport);
@@ -91,7 +91,7 @@ public class ActorDispatchTests
     [Fact]
     public void RpcMethodClaimingAReservedPrototypeMemberIsDiagnosed()
     {
-        var run = GeneratorHarness.Run(TestSources.ReservedNameActor);
+        var run = GeneratorHarness.RunActors(TestSources.ReservedNameActor);
         Assert.Equal(["CFW012"], run.DefectIds);
         Assert.Contains("fetch", run.Defects.Single().GetMessage());
         Assert.Equal("no errors", run.ErrorReport);

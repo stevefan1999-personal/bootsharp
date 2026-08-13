@@ -4,7 +4,7 @@ namespace Cloudflare.Backend;
 /// User Durable Object. wrangler <c>class_name</c> is this type name.
 /// No JavaScript class to write — publish emits <c>export class Counter extends DurableObject</c>.
 /// </summary>
-public sealed class Counter : DurableObject
+public sealed class Counter : DurableObject<ICloudflareEnv>
 {
     public Counter(IDurableObjectState ctx, ICloudflareEnv env) : base(ctx, env) { }
 

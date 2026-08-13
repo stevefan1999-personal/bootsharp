@@ -4,7 +4,7 @@ namespace Cloudflare.Backend;
 /// User workflow. wrangler <c>class_name</c> is this type name.
 /// No JavaScript class to write — publish emits <c>export class DemoWorkflow extends WorkflowEntrypoint</c>.
 /// </summary>
-public sealed class DemoWorkflow : WorkflowEntrypoint
+public sealed class DemoWorkflow : WorkflowEntrypoint<ICloudflareEnv>
 {
     public DemoWorkflow(IExecutionContext ctx, ICloudflareEnv env) : base(ctx, env) { }
 

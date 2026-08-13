@@ -26,3 +26,19 @@ public interface IWorker
     Task Queue(string messagesJson, ICloudflareEnv env);
     Task Scheduled(IScheduledController controller, ICloudflareEnv env);
 }
+
+/// <summary>
+/// Guest-side registry used by generated JS classes (workers-rs wasm-bindgen equivalent).
+/// Method switches are source-generated from <c>: DurableObject</c> / <c>: WorkflowEntrypoint</c>.
+/// </summary>
+/// <remarks>
+/// Exported rather than library-owned for the same reason as <see cref="IWorker"/>: its signatures
+/// name <see cref="ICloudflareEnv"/>, and Bootsharp exports closed interfaces, not generic ones.
+/// </remarks>
+public interface IActorRuntime
+{
+    int ConstructDurableObject(string className, IDurableObjectState ctx, ICloudflareEnv env);
+    int ConstructWorkflow(string className, IExecutionContext ctx, ICloudflareEnv env);
+    Task<string> CallDurableObject(int id, string method, string argsJson);
+    Task<string> RunWorkflow(int id, string payloadJson, IWorkflowStep step);
+}

@@ -8,7 +8,8 @@ namespace Cloudflare.Backend;
 /// Fetch/Queue/Scheduled run in WASM and JSImport the live <c>Request</c>, <c>controller</c>
 /// and <c>env</c> handles.
 /// </summary>
-public sealed class Worker(WebApplication app, ILogger<Worker> logger) : WorkerEntrypoint, IWorker
+public sealed class Worker(WebApplication app, ILogger<Worker> logger)
+    : WorkerEntrypoint<ICloudflareEnv, HttpResponseData>, IWorker
 {
     /// <summary>KV key holding the heartbeat written by <see cref="Scheduled"/>.</summary>
     public const string ScheduledHeartbeatKey = "last-scheduled";
@@ -29,8 +30,6 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger) : WorkerE
                 request.HeadersJson,
                 body,
                 request.CfJson);
-            if (IsAsset(data.Path))
-                return Results.Assets().ToResponse();
             return await app.InvokeAsync(data);
         }
         catch (Exception ex)
@@ -89,13 +88,5 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger) : WorkerE
         return "{\"cron\":\"" + Json.Escape(controller.Cron)
             + "\",\"scheduledTime\":" + scheduledTimeMs
             + ",\"scheduledAt\":\"" + scheduledAt.ToString("O") + "\"}";
-    }
-
-    private static bool IsAsset(string path)
-    {
-        return path.StartsWith("/app", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/css", StringComparison.OrdinalIgnoreCase)
-            || path.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase);
     }
 }

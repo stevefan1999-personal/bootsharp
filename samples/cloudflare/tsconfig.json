@@ -10,10 +10,10 @@
     "types": [],
     "noEmit": true,
     "strict": false,
-    "skipLibCheck": true,
-    // The emitted entrypoint module imports the shim as "../timer-shim.ts": wrangler's esbuild
-    // resolves that literally, so the checker has to accept the extension rather than rewrite it.
-    "allowImportingTsExtensions": true
+    "skipLibCheck": true
   },
-  "include": ["worker/src/**/*.ts", "worker-configuration.d.ts"]
+  // The worker module is publish output, not source: this is the gate that keeps a
+  // regression in the emitter from reaching wrangler. It resolves "./runtime.mjs" through the
+  // declarations the package ships beside it, and "*.wasm" through the ambient wasm.d.ts.
+  "include": ["dist/worker/**/*.ts", "worker-configuration.d.ts"]
 }

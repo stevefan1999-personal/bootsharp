@@ -7,10 +7,10 @@ namespace Cloudflare.Backend.Data;
 internal static class SqlJson
 {
     /// <summary>
-    /// Tag of the object wrapping a base64 BLOB; JSON has no binary literal and
-    /// <c>JSON.stringify</c> flattens an <c>ArrayBuffer</c> to <c>{}</c>.
+    /// Tag of the object wrapping a base64 BLOB. Owned by the library, because the packaged JS
+    /// runtime writes the same key: one constant, one place.
     /// </summary>
-    public const string BlobTag = "$blob";
+    public const string BlobTag = SqlTransport.BlobTag;
 
     public static string EncodeBinds(IReadOnlyList<object?> values)
     {
