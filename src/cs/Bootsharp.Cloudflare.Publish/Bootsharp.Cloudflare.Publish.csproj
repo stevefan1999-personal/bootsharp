@@ -13,7 +13,7 @@
         <!-- One suite drives both halves of the pipeline end to end — the generator over sources,
              then this emitter over the assembly that compilation produced — so it lives under the
              generator's name. ADR-0007 milestone 4/5 moves it out of the sample into src/cs. -->
-        <InternalsVisibleTo Include="Bootsharp.Cloudflare.Generate.Tests"/>
+        <InternalsVisibleTo Include="Bootsharp.Cloudflare.Generate.Test"/>
         <PackageReference Include="Microsoft.Build.Framework" Version="18.6.3" PrivateAssets="all"/>
         <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.6.3" PrivateAssets="all"/>
         <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.8"/>
