@@ -89,3 +89,26 @@ npm run deploy
 ```
 
 LLVM is forced (`BsLlvm=true`). Paid plan: 10 MB gzip Worker, `limits.cpu_ms` 30000.
+
+## Size and startup (measured 2026-08-14)
+
+The number that matters is the **deployable bundle gzip** reported by
+`npx wrangler check startup` — wasm plus ~205 KiB of JS glue — not the wasm file alone.
+The enforced free-plan ceiling is 3 MiB gzip (API error 10027); the paid 10 MiB figure is
+documented but not encoded in tooling.
+
+| Variant | wasm raw | wasm gzip | notes |
+| --- | --- | --- | --- |
+| full sample | 8,710,087 | 3,081,467 | bundle gzip **3,291,904 — 146 KB over the free ceiling**; paid plan required |
+| without FreeSql | 2,044,672 | 786,564 | the ORM costs 75% of the binary |
+| without data layer | 2,044,672 | 786,565 | ADO/D1 layer itself is free — FreeSql is the entire cost |
+| without SSR page | 8,679,009 | 3,064,400 | SSR is ~17 KB |
+| fetch-only floor | 1,708,820 | 668,170 | minimal C# worker incl. structured logging — comfortably free-plan |
+
+Startup CPU is a non-issue: `wrangler check startup` profiles **9.7 ms active** against the
+400 ms budget, because boot is lazy — the isolate startup phase only evaluates the JS shim,
+and .NET instantiation happens inside the first request.
+
+Do not bother re-sweeping ILC/trimmer feature switches: Bootsharp's release defaults already
+set all of them (verified switch-by-switch; every candidate produced a byte-identical build).
+Details and the attribution table live in `docs/adr/0006-toolchain-and-testing.md` §5.
