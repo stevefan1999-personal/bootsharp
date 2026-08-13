@@ -122,11 +122,7 @@ public static class HomePage
         <input name="body" placeholder="note text" required/>
         <button type="submit">Insert</button>
       </form>
-      <p><a href="/api/d1-grid">typed grid</a> · <a href="/api/linq2db">linq2db JSON</a> · <a href="/api/freesql">FreeSql JSON</a></p>
-      <form method="post" action="/api/linq2db">
-        <input name="body" placeholder="linq2db insert" required/>
-        <button type="submit">Insert via linq2db</button>
-      </form>
+      <p><a href="/api/d1-grid">typed grid</a> · <a href="/api/freesql">FreeSql JSON</a></p>
       <form method="post" action="/api/freesql">
         <input name="body" placeholder="freesql insert" required/>
         <button type="submit">Insert via FreeSql</button>

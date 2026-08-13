@@ -12,8 +12,6 @@ public static class Routes
         app.MapPost<SiteService>("/api/kv", (site, ctx) => site.PutKv(ctx));
         app.MapGet<SiteService>("/api/d1", (site, ctx) => site.GetD1(ctx));
         app.MapGet<SiteService>("/api/d1-grid", (site, ctx) => site.GetD1Grid(ctx));
-        app.MapGet<SiteService>("/api/linq2db", (site, ctx) => site.GetLinq2Db(ctx));
-        app.MapPost<SiteService>("/api/linq2db", (site, ctx) => site.PostLinq2Db(ctx));
         app.MapGet<SiteService>("/api/freesql", (site, ctx) => site.GetFreeSql(ctx));
         app.MapPost<SiteService>("/api/freesql", (site, ctx) => site.PostFreeSql(ctx));
         app.MapPost<SiteService>("/api/d1", (site, ctx) => site.PostD1(ctx));

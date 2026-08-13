@@ -2,9 +2,6 @@ using Cloudflare.Backend.Data;
 using Cloudflare.Backend.Hosting;
 using Cloudflare.Backend.Ssr;
 using FreeSql;
-using LinqToDB;
-using LinqToDB.Async;
-using LinqToDB.Data;
 
 namespace Cloudflare.Backend;
 
@@ -60,23 +57,6 @@ public sealed class SiteService
     {
         var grid = await db.Prepare("SELECT id, body, created_at FROM notes ORDER BY id DESC LIMIT 5").Grid();
         return Results.Json("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Escape(c) + "\"")) + "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
-    }
-
-    public async Task<IResult> GetLinq2Db(HttpContext ctx)
-    {
-        await using var linq = LinqToDbNotes.Open(db);
-        var notes = await linq.GetTable<Note>().OrderByDescending(n => n.Id).Take(20).ToListAsync();
-        var json = "[" + string.Join(",", notes.Select(n =>
-            "{\"id\":" + n.Id + ",\"body\":" + ToJson(n.Body) + ",\"created_at\":" + ToJson(n.CreatedAt) + "}")) + "]";
-        return Results.Json("{\"orm\":\"linq2db\",\"notes\":" + json + "}");
-    }
-
-    public async Task<IResult> PostLinq2Db(HttpContext ctx)
-    {
-        var form = ParseForm(ctx.Request.Body);
-        await using var linq = LinqToDbNotes.Open(db);
-        await linq.InsertAsync(new Note { Body = form.GetValueOrDefault("body", "") });
-        return SeeHome("linq2db-inserted");
     }
 
     public async Task<IResult> GetFreeSql(HttpContext ctx)
