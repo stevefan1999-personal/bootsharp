@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    // Runtime types and the Env shape come from worker-configuration.d.ts (`npm run types`),
+    // which is projected from wrangler.jsonc and therefore knows the actual bindings;
+    // @cloudflare/workers-types cannot know ASSETS/KV/DB/BUCKET/QUEUE exist.
+    "types": [],
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    // The emitted entrypoint module imports the shim as "../timer-shim.ts": wrangler's esbuild
+    // resolves that literally, so the checker has to accept the extension rather than rewrite it.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["worker/src/**/*.ts", "worker-configuration.d.ts"]
+}

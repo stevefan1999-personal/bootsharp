@@ -1,0 +1,21 @@
+@page "/"
+@page "/app"
+@inject HttpClient Http
+
+<PageTitle>Bootsharp Blazor</PageTitle>
+<h1>Blazor WASM on Cloudflare Assets</h1>
+<p>This client talks to the C# Worker API.</p>
+<pre>@_health</pre>
+<button @onclick="Load">Reload health</button>
+
+@code {
+    private string _health = "loading…";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { _health = await Http.GetStringAsync("/api/health"); }
+        catch (Exception ex) { _health = ex.Message; }
+    }
+}

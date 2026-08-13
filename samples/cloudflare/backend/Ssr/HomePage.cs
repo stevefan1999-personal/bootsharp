@@ -1,0 +1,178 @@
+using System.Net;
+
+namespace Cloudflare.Backend.Ssr;
+
+public sealed class HomeModel
+{
+    public string Runtime { get; init; } = "";
+    public string Host { get; init; } = "";
+    public string WorkersTypes { get; init; } = "";
+    public string? KvValue { get; init; }
+    public string D1Rows { get; init; } = "[]";
+    public string R2Objects { get; init; } = "[]";
+    public int Counter { get; init; }
+    public string? Flash { get; init; }
+    public string? Error { get; init; }
+}
+
+public static class HomePage
+{
+    public static string Render(HomeModel model)
+    {
+        var flash = model.Flash is { Length: > 0 }
+            ? $"<p class=\"flash\">{H(model.Flash)}</p>"
+            : "";
+        var error = model.Error is { Length: > 0 }
+            ? $"<p class=\"error\">{H(model.Error)}</p>"
+            : "";
+
+        return $$"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Bootsharp on Cloudflare</title>
+  <style>
+    :root {
+      --bg: #0c0a12;
+      --panel: #161221;
+      --ink: #f4f0ff;
+      --muted: #a89bb8;
+      --line: #2c2438;
+      --accent: #8b5cf6;
+      --accent-2: #22d3ee;
+      --ok: #34d399;
+      --bad: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+    a { color: var(--accent-2); }
+    header {
+      padding: 2.5rem 1.5rem 1.5rem;
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(1200px 400px at 10% -10%, rgba(139,92,246,.25), transparent 50%),
+        radial-gradient(800px 300px at 90% 0%, rgba(34,211,238,.12), transparent 45%);
+    }
+    header h1 { margin: 0 0 .4rem; font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -.03em; }
+    header p { margin: 0; color: var(--muted); max-width: 46rem; }
+    nav { display: flex; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--line); }
+    main { display: grid; gap: 1rem; padding: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    article {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 1.1rem 1.2rem 1.2rem;
+    }
+    article h2 { margin: 0 0 .35rem; font-size: 1.05rem; }
+    article p { margin: 0 0 .8rem; color: var(--muted); font-size: .92rem; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    pre { background: #0a0810; padding: .75rem; border-radius: 10px; overflow: auto; font-size: .8rem; color: #d8cfff; }
+    form { display: flex; flex-direction: column; gap: .5rem; }
+    input, button {
+      border-radius: 10px; border: 1px solid var(--line); padding: .55rem .7rem;
+      font: inherit; color: var(--ink); background: #0a0810;
+    }
+    button {
+      background: var(--accent); border-color: transparent; font-weight: 650; cursor: pointer;
+    }
+    button.secondary { background: transparent; border-color: var(--line); }
+    .flash { color: var(--ok); }
+    .error { color: var(--bad); }
+    footer { padding: 1.5rem; color: var(--muted); font-size: .85rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: .15rem .65rem; font-size: .8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Bootsharp × Cloudflare</h1>
+    <p>C# NativeAOT-LLVM WASM running as a Worker. This HTML is server-rendered by .NET on the isolate. Bindings (KV, D1, R2, Durable Objects, Queues, Workflows) are JS objects called from C# via Bootsharp <code>[Import]</code>.</p>
+    <div class="meta">
+      <span class="pill">runtime {{H(model.Runtime)}}</span>
+      <span class="pill">host {{H(model.Host)}}</span>
+      <span class="pill">workers-types {{H(model.WorkersTypes)}}</span>
+      <span class="pill">LLVM wasm</span>
+      <span class="pill">ASP.NET Core shim</span>
+    </div>
+    {{flash}}{{error}}
+  </header>
+  <nav>
+    <a href="/">SSR home</a>
+    <a href="/app/">Blazor WASM</a>
+    <a href="/api/health">health JSON</a>
+  </nav>
+  <main>
+    <article>
+      <h2>KV</h2>
+      <p>Edge key-value. Current <code>demo</code> value:</p>
+      <pre>{{H(model.KvValue ?? "(empty)")}}</pre>
+      <form method="post" action="/api/kv">
+        <input name="key" value="demo" required/>
+        <input name="value" placeholder="new value" required/>
+        <button type="submit">Put</button>
+      </form>
+    </article>
+    <article>
+      <h2>D1</h2>
+      <p>SQLite at the edge. Rows in <code>notes</code>:</p>
+      <pre>{{H(model.D1Rows)}}</pre>
+      <form method="post" action="/api/d1">
+        <input name="body" placeholder="note text" required/>
+        <button type="submit">Insert</button>
+      </form>
+      <p><a href="/api/d1-grid">typed grid</a> · <a href="/api/linq2db">linq2db JSON</a> · <a href="/api/freesql">FreeSql JSON</a></p>
+      <form method="post" action="/api/linq2db">
+        <input name="body" placeholder="linq2db insert" required/>
+        <button type="submit">Insert via linq2db</button>
+      </form>
+      <form method="post" action="/api/freesql">
+        <input name="body" placeholder="freesql insert" required/>
+        <button type="submit">Insert via FreeSql</button>
+      </form>
+    </article>
+    <article>
+      <h2>R2</h2>
+      <p>Object storage. Listed objects:</p>
+      <pre>{{H(model.R2Objects)}}</pre>
+      <form method="post" action="/api/r2">
+        <input name="key" value="hello.txt" required/>
+        <input name="value" placeholder="object text" required/>
+        <button type="submit">Put object</button>
+      </form>
+    </article>
+    <article>
+      <h2>Durable Object</h2>
+      <p>C# <code>Counter : DurableObject</code>. wrangler <code>class_name</code> is the type name; no JS class to write.</p>
+      <pre>{{model.Counter}}</pre>
+      <form method="post" action="/api/do">
+        <button type="submit">Increment</button>
+      </form>
+      <p><a href="/api/do-sql">DO SQLite ticks</a></p>
+    </article>
+    <article>
+      <h2>Queue</h2>
+      <p>Producer from C#. Consumer is the same Worker <code>queue</code> handler, which writes the payload into KV.</p>
+      <form method="post" action="/api/queue">
+        <input name="body" placeholder="queue payload" required/>
+        <button type="submit">Send</button>
+      </form>
+    </article>
+    <article>
+      <h2>Workflow</h2>
+      <p>Durable multi-step run. C# <code>DemoWorkflow : WorkflowEntrypoint</code> owns <code>Run</code>; publish emits the JS class.</p>
+      <form method="post" action="/api/workflow">
+        <input name="userId" placeholder="user id" value="demo" required/>
+        <button type="submit">Start</button>
+      </form>
+    </article>
+  </main>
+  <footer>Paid Workers plan · 30s CPU · 10 MB gzip · instantiate WASM once per isolate.</footer>
+</body>
+</html>
+""";
+    }
+
+    private static string H(string value) => WebUtility.HtmlEncode(value);
+}

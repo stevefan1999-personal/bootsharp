@@ -1,0 +1,64 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bootsharp-cloudflare",
+  "main": "worker/src/generated/entrypoints.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "bb69253f02c5edc7125c285387b47388",
+  "workers_dev": true,
+  "preview_urls": true,
+  "limits": { "cpu_ms": 30000 },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "assets": {
+    "directory": "./dist/wwwroot",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "kv_namespaces": [
+    { "binding": "KV", "id": "3263afc8eb894d0191b47caeb62cdc2d" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bootsharp-cf",
+      "database_id": "51e0c7c3-c2e7-4e3b-af8a-48121454e2d0",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "bootsharp-cf" }
+  ],
+  "queues": {
+    "producers": [{ "binding": "QUEUE", "queue": "bootsharp-cf" }],
+    "consumers": [
+      {
+        "queue": "bootsharp-cf",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3
+      }
+    ]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
+  ],
+  "workflows": [
+    {
+      "binding": "WORKFLOW",
+      "name": "bootsharp-demo",
+      "class_name": "DemoWorkflow"
+    }
+  ]
+}

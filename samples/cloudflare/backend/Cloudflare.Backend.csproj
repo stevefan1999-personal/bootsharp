@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Cloudflare.Backend</RootNamespace>
+        <AssemblyName>Cloudflare.Backend</AssemblyName>
+        <BootsharpName>backend</BootsharpName>
+        <BootsharpBinariesDirectory>$(MSBuildProjectDirectory)/../dist/wasm</BootsharpBinariesDirectory>
+        <BootsharpPublishDirectory>$(MSBuildProjectDirectory)/../dist/js</BootsharpPublishDirectory>
+        <BootsharpPackageDirectory>$(MSBuildProjectDirectory)/../dist</BootsharpPackageDirectory>
+        <!-- NativeAOT-LLVM for Debug and Release. Command line /p:BsLlvm=true also forces the LLVM props import. -->
+        <BsLlvm>true</BsLlvm>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <InvariantTimezone>true</InvariantTimezone>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <EmccFlags>$(EmccFlags) -sENVIRONMENT=web -sDYNAMIC_EXECUTION=0</EmccFlags>
+        <IsAotCompatible>true</IsAotCompatible>
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <!-- NativeAOT-LLVM does not use wasm-tools; this host has a broken workload manifest set. -->
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <CloudflareJsOutputDir>$(MSBuildProjectDirectory)/../worker/src/generated</CloudflareJsOutputDir>
+        <CloudflareWasmImport>../../../dist/wasm/backend.wasm</CloudflareWasmImport>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <CompilerVisibleProperty Include="CloudflareJsOutputDir" />
+        <CompilerVisibleProperty Include="CloudflareWasmImport" />
+        <ProjectReference Include="../generator/Cloudflare.Workers.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="../sqlite-stub/Cloudflare.SqliteStub.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Bootsharp" Version="0.9.0" />
+        <PackageReference Include="Bootsharp.Inject" Version="0.9.0" />
+        <PackageReference Include="FreeSql.Provider.Custom" Version="3.5.311" />
+        <PackageReference Include="linq2db" Version="6.2.1" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+    </ItemGroup>
+
+    <!-- Keep SQLite/Custom ORM surface without rooting every dialect in the two ORM assemblies. -->
+    <ItemGroup>
+        <TrimmerRootType Include="LinqToDB.Internal.DataProvider.SQLite.SQLiteDataProviderMS" />
+        <TrimmerRootType Include="LinqToDB.Internal.DataProvider.SQLite.SQLiteSqlBuilder" />
+        <TrimmerRootType Include="FreeSql.Custom.CustomProvider`1" />
+        <TrimmerRootType Include="Cloudflare.Backend.Data.Note" />
+        <TrimmerRootType Include="Cloudflare.Backend.Data.FreeSqlNote" />
+        <TrimmerRootAssembly Include="Microsoft.Data.Sqlite" />
+    </ItemGroup>
+
+</Project>
