@@ -2,6 +2,7 @@ using Cloudflare.Backend.Data;
 using Cloudflare.Backend.Hosting;
 using Cloudflare.Backend.Ssr;
 using FreeSql;
+using Microsoft.Extensions.Logging;
 
 namespace Cloudflare.Backend;
 
@@ -9,7 +10,7 @@ namespace Cloudflare.Backend;
 /// Request handlers. Cloudflare product bindings come from the per-request
 /// <see cref="WorkerContext.Env"/> handle (C# JSImport into workerd).
 /// </summary>
-public sealed class SiteService
+public sealed class SiteService(ILogger<SiteService> logger)
 {
     private static IKvNamespace kv => WorkerContext.Env.KV;
     private static ID1Database db => WorkerContext.Env.DB;
@@ -30,14 +31,14 @@ public sealed class SiteService
     public async Task<IResult> Health(HttpContext ctx)
     {
         var runtime = ".NET " + Environment.Version;
-        return Results.Json("{\"ok\":true,\"runtime\":\"" + Escape(runtime) + "\",\"framework\":\"bootsharp-nativeaot-llvm\",\"workersTypes\":\"" + WorkersTypes.Version + "\",\"environment\":\"" + Escape(environment) + "\"}");
+        return Results.Json("{\"ok\":true,\"runtime\":\"" + Json.Escape(runtime) + "\",\"framework\":\"bootsharp-nativeaot-llvm\",\"workersTypes\":\"" + WorkersTypes.Version + "\",\"environment\":\"" + Json.Escape(environment) + "\"}");
     }
 
     public async Task<IResult> GetKv(HttpContext ctx)
     {
         var key = Query(ctx, "key") ?? "demo";
         var value = await kv.Get(key);
-        return Results.Json("{\"key\":\"" + Escape(key) + "\",\"value\":" + ToJson(value) + "}");
+        return Results.Json("{\"key\":\"" + Json.Escape(key) + "\",\"value\":" + Json.Quote(value) + "}");
     }
 
     public async Task<IResult> PutKv(HttpContext ctx)
@@ -56,7 +57,7 @@ public sealed class SiteService
     public async Task<IResult> GetD1Grid(HttpContext ctx)
     {
         var grid = await db.Prepare("SELECT id, body, created_at FROM notes ORDER BY id DESC LIMIT 5").Grid();
-        return Results.Json("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Escape(c) + "\"")) + "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
+        return Results.Json("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Json.Escape(c) + "\"")) + "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
     }
 
     public async Task<IResult> GetFreeSql(HttpContext ctx)
@@ -64,7 +65,7 @@ public sealed class SiteService
         using var fsql = FreeSqlNotes.Open(db);
         var notes = await fsql.Select<FreeSqlNote>().OrderByDescending(n => n.Id).Take(20).ToListAsync();
         var json = "[" + string.Join(",", notes.Select(n =>
-            "{\"id\":" + n.Id + ",\"body\":" + ToJson(n.Body) + ",\"created_at\":" + ToJson(n.CreatedAt) + "}")) + "]";
+            "{\"id\":" + n.Id + ",\"body\":" + Json.Quote(n.Body) + ",\"created_at\":" + Json.Quote(n.CreatedAt) + "}")) + "]";
         return Results.Json("{\"orm\":\"freesql\",\"notes\":" + json + "}");
     }
 
@@ -88,7 +89,7 @@ public sealed class SiteService
         var key = Query(ctx, "key") ?? "hello.txt";
         var obj = await r2.Get(key);
         var text = obj is null ? null : await obj.Text();
-        return Results.Json("{\"key\":\"" + Escape(key) + "\",\"value\":" + ToJson(text) + "}");
+        return Results.Json("{\"key\":\"" + Json.Escape(key) + "\",\"value\":" + Json.Quote(text) + "}");
     }
 
     public async Task<IResult> PutR2(HttpContext ctx)
@@ -129,7 +130,7 @@ public sealed class SiteService
         var userId = form.GetValueOrDefault("userId", "demo");
         var instance = await workflow.Create(new WorkflowInstanceCreateOptions
         {
-            Params = "{\"userId\":\"" + Escape(userId) + "\"}"
+            Params = "{\"userId\":\"" + Json.Escape(userId) + "\"}"
         });
         return SeeHome("workflow-" + instance.Id);
     }
@@ -141,6 +142,9 @@ public sealed class SiteService
     public async Task<IResult> GetScheduled(HttpContext ctx)
     {
         var heartbeat = await kv.Get(Worker.ScheduledHeartbeatKey);
+        // Template arguments become their own fields in Workers Logs, so "did the cron ever run in
+        // this environment" is answerable by filtering on the field rather than grepping messages.
+        logger.LogInformation("scheduled heartbeat read {Found} in {Environment}", heartbeat is not null, environment);
         return Results.Json("{\"lastScheduled\":" + (heartbeat ?? "null") + "}");
     }
 
@@ -159,7 +163,7 @@ public sealed class SiteService
         try
         {
             var listed = await r2.List(new R2ListOptions { Prefix = "", Limit = 20 });
-            r2List = "[" + string.Join(",", listed.Objects.Select(o => "{\"key\":\"" + Escape(o.Key) + "\",\"size\":" + o.Size + "}")) + "]";
+            r2List = "[" + string.Join(",", listed.Objects.Select(o => "{\"key\":\"" + Json.Escape(o.Key) + "\",\"size\":" + o.Size + "}")) + "]";
         }
         catch (Exception ex) { loadError = Join(loadError, "r2: " + ex.Message); }
         try { n = (await counter.GetByName("global").Get()).Value; } catch (Exception ex) { loadError = Join(loadError, "do: " + ex.Message); }
@@ -200,10 +204,6 @@ public sealed class SiteService
     }
 
     private static Dictionary<string, string> ParseForm(string body) => ParseQuery(body);
-
-    internal static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
-
-    private static string ToJson(string? value) => value is null ? "null" : "\"" + Escape(value) + "\"";
 
     private static string Join(string? left, string right) => string.IsNullOrEmpty(left) ? right : left + "; " + right;
 }

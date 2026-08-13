@@ -52,6 +52,34 @@ C# Counter / DemoWorkflow  ←  generated extends DurableObject / WorkflowEntryp
 
 JS is the Worker; WASM is a library. workerd has no WASI host and no threads; LLVM is `browser-wasm` + JS imports.
 
+## Local development
+
+```bash
+cd samples/cloudflare
+npm install
+npx wrangler d1 migrations apply bootsharp-cf --local
+npm run dev
+```
+
+The migration is a one-time step per checkout. `wrangler dev --local` starts against an empty local
+D1 instance, and every D1-backed route (`/`, `/api/d1`, `/api/d1-grid`, `/api/freesql`) reads the
+`notes` table that `migrations/0001_init.sql` creates — without applying it those routes fail with
+`no such table: notes`.
+
+## Logging
+
+`ILogger<T>` is injected the usual way. The single registered provider renders each entry as one
+flat JSON object — `time`, `level`, `category`, `message`, `exception` when one is attached, plus
+the message template's arguments as their own fields — and hands it to JavaScript through the
+`ILogSink` module import. The isolate parses it and calls `console.debug` / `info` / `warn` /
+`error` according to the level.
+
+Handing over a parsed object rather than text is the load-bearing part: Cloudflare's Workers Logs
+indexes the fields of a real JS object, whereas a JSON string — or anything written to stdout from
+WASM — is stored as one opaque message. The `observability` block in `wrangler.jsonc` is what keeps
+those entries in Workers Logs, queryable field by field; under `wrangler dev` the same objects
+print to the terminal.
+
 ## Publish
 
 ```bash

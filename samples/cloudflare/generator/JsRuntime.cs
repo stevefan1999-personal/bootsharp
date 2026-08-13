@@ -49,12 +49,30 @@ async function reentrant<T>(work: () => T | PromiseLike<T>): Promise<T> {
   return work();
 }
 
+// LogLevel as.NET orders it. The entry object carries the name for the log index; the number
+// picked here only chooses the console method, which is what workerd maps to a log severity.
+const logLevel = { trace: 0, debug: 1, information: 2, warning: 3, error: 4, critical: 5 };
+
+// Workers Logs indexes the fields of a real JS object handed to console.*; a JSON string — and
+// equally anything the guest writes to stdout — is stored as one opaque message. So the entry
+// crosses the boundary as text and is parsed here, on the only side that can produce that object.
+function writeLogEntry(level, entryJson) {
+  const entry = JSON.parse(entryJson);
+  if (level >= logLevel.error) console.error(entry);
+  else if (level === logLevel.warning) console.warn(entry);
+  else if (level === logLevel.information) console.info(entry);
+  else console.debug(entry);
+}
+
 export async function ensureBoot() {
   if (api) return api;
   if (!booting) {
     booting = (async () => {
       enableWorkerTimers();
       const mod = await import("../../../dist/js/index.mjs");
+      // The guest declares [assembly: Import(typeof(ILogSink))], so this handler is what its
+      // generated proxy calls. Bound before boot, because the entry point may already log.
+      mod.ILogSink.write = writeLogEntry;
       await mod.default.boot({ wasm: new ArrayBuffer(8) });
       api = mod;
       return mod;

@@ -1,4 +1,5 @@
 using Cloudflare.Backend.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Cloudflare.Backend;
 
@@ -7,7 +8,7 @@ namespace Cloudflare.Backend;
 /// Fetch/Queue/Scheduled run in WASM and JSImport the live <c>Request</c>, <c>controller</c>
 /// and <c>env</c> handles.
 /// </summary>
-public sealed class Worker(WebApplication app) : WorkerEntrypoint, IWorker
+public sealed class Worker(WebApplication app, ILogger<Worker> logger) : WorkerEntrypoint, IWorker
 {
     /// <summary>KV key holding the heartbeat written by <see cref="Scheduled"/>.</summary>
     public const string ScheduledHeartbeatKey = "last-scheduled";
@@ -34,7 +35,9 @@ public sealed class Worker(WebApplication app) : WorkerEntrypoint, IWorker
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Worker.Fetch failed: {ex}");
+            // Operators get the detail through Workers Logs, the caller an opaque 500. Nothing is
+            // read off the request here: that handle may be what failed in the first place.
+            logger.LogError(ex, "worker fetch failed");
             return Results.Text("Internal server error", 500).ToResponse();
         }
         finally
@@ -83,7 +86,7 @@ public sealed class Worker(WebApplication app) : WorkerEntrypoint, IWorker
     {
         var scheduledTimeMs = (long)controller.ScheduledTime;
         var scheduledAt = DateTimeOffset.FromUnixTimeMilliseconds(scheduledTimeMs);
-        return "{\"cron\":\"" + SiteService.Escape(controller.Cron)
+        return "{\"cron\":\"" + Json.Escape(controller.Cron)
             + "\",\"scheduledTime\":" + scheduledTimeMs
             + ",\"scheduledAt\":\"" + scheduledAt.ToString("O") + "\"}";
     }
