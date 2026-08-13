@@ -1,0 +1,44 @@
+<Project>
+
+    <PropertyGroup>
+        <BsCfRoot>$(MSBuildThisFileDirectory)../</BsCfRoot>
+        <!-- Hand-written ESM assets shipped with the package: the worker runtime and the timer
+             shim (ADR-0005 §5). Copied next to the emitted module, never pasted into it. -->
+        <BsCfAssetDirectory Condition="'$(BsCfAssetDirectory)' == ''">$(BsCfRoot)js</BsCfAssetDirectory>
+        <BsCfTaskAssembly Condition="'$(BsCfTaskAssembly)' == ''">$(BsCfRoot)tasks/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
+        <!-- Where the emitted module and its assets land. It is build output, not source: point
+             wrangler's `main` at it and let publish produce it (ADR-0006 §1). -->
+        <BsCfWorkerDirectory Condition="'$(BsCfWorkerDirectory)' == ''">$(MSBuildProjectDirectory)/worker</BsCfWorkerDirectory>
+    </PropertyGroup>
+
+    <!-- Register the task for Visual Studio, mirroring Bootsharp.targets. -->
+    <UsingTask Condition="'$(MSBuildRuntimeType)' == 'Full'"
+               TaskName="Bootsharp.Cloudflare.Publish.GenerateWorker" AssemblyFile="$(BsCfTaskAssembly)"
+               Runtime="NET" TaskFactory="TaskHostFactory"/>
+    <!-- Register the task for 'dotnet publish' run from CLI. -->
+    <UsingTask Condition="'$(MSBuildRuntimeType)' != 'Full'"
+               TaskName="Bootsharp.Cloudflare.Publish.GenerateWorker" AssemblyFile="$(BsCfTaskAssembly)"/>
+
+    <!-- After BootsharpJS, because the module's imports are resolved against what that target
+         published: the renamed wasm binary and the Bootsharp ES module. -->
+    <Target Name="BootsharpCloudflareWorker" AfterTargets="BootsharpJS">
+
+        <!-- workerd refuses to compile wasm from bytes inside a request (ADR-0005 §1), so the
+             binary has to reach the isolate as a CompiledWasm module import — which needs it to
+             exist as a file rather than embedded in Bootsharp's resources module. -->
+        <Error Condition="'$(BootsharpBinariesDirectory)' == ''"
+               Text="Set BootsharpBinariesDirectory: a Cloudflare worker imports the wasm binary as a module, so it cannot be embedded."/>
+
+        <!-- Purge stale artifacts left from previous builds, as BootsharpJS does for its own. -->
+        <RemoveDir Directories="$(BsCfWorkerDirectory)"/>
+
+        <GenerateWorker WorkerDirectory="$(BsCfWorkerDirectory)"
+                        AssetDirectory="$(BsCfAssetDirectory)"
+                        EntryAssembly="$(OutputPath)$(TargetFileName)"
+                        References="@(ReferencePath)"
+                        WasmFile="$(BootsharpBinariesDirectory)/$(BootsharpName).wasm"
+                        BootModule="$(BootsharpPublishDirectory)/index.mjs"/>
+
+    </Target>
+
+</Project>

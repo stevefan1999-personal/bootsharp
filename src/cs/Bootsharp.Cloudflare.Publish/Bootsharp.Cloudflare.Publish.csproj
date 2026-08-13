@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <!-- Shipped inside the Bootsharp.Cloudflare package's tasks/ folder, like
+             Bootsharp.Publish ships inside Bootsharp. -->
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- One suite drives both halves of the pipeline end to end — the generator over sources,
+             then this emitter over the assembly that compilation produced — so it lives under the
+             generator's name. ADR-0007 milestone 4/5 moves it out of the sample into src/cs. -->
+        <InternalsVisibleTo Include="Bootsharp.Cloudflare.Generate.Tests"/>
+        <PackageReference Include="Microsoft.Build.Framework" Version="18.6.3" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.6.3" PrivateAssets="all"/>
+        <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.8"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The projection model and its classification rules are shared verbatim with the Roslyn
+             generator, which resolves the same model from symbols so it can attach diagnostics to
+             source locations. Linked rather than referenced: the generator is a netstandard2.0
+             analyzer carrying Roslyn, none of which belongs next to an MSBuild task. -->
+        <Compile Include="../Bootsharp.Cloudflare.Generate/Projection/*.cs" LinkBase="Projection"/>
+    </ItemGroup>
+
+</Project>
