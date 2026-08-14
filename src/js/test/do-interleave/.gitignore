@@ -1,0 +1,3 @@
+# The driver's own output: the full traces of the last run. Regenerated every run, quoted in
+# README.md where it matters, and far too large to be worth versioning.
+findings.json

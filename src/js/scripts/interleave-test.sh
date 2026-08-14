@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# The NativeAOT-LLVM end-to-end lane (ADR-0006 §4, research/06 implication 10). compile-test.sh
-# publishes -c Debug, which is Mono; this publishes the same way a Cloudflare Worker ships —
-# BsLlvm=true, one native .wasm — and runs the exercise worker under real workerd, asserting the
-# ADR-0002 Tier-1 capabilities where they actually ship.
+# PACKAGE H — the Durable Object event-interleaving harness (ADR-0010 §6, the milestone that gates
+# every other piece of SignalR work). Same conventions as llvm-test.sh: publish the way a Cloudflare
+# Worker actually ships (BsLlvm=true, one native .wasm), then drive it under real workerd.
+#
+# It answers three questions with instrumented C# handlers rather than with reasoning:
+#   1. can two webSocketMessage events interleave while a hub-method-shaped handler awaits?
+#   2. can a DO alarm fire mid-await?
+#   3. what survives a hibernation wake mid-conversation?
 #
 # Prerequisites, in order: src/cs/.scripts/llvm.sh (the ILCompiler-LLVM packs) and
-# src/cs/.scripts/pack.sh (the Bootsharp packages the exercise project restores).
+# src/cs/.scripts/pack.sh (the Bootsharp packages the harness restores).
 #
 # Pass --publish-only to stop after the publish, for iterating on the worker by hand.
 set -e
 
-cd "$(dirname "$0")/../test/llvm"
+cd "$(dirname "$0")/../test/do-interleave"
 
 if [ ! -f ../../../cs/.llvm/microsoft.dotnet.ilcompiler.llvm/build/Microsoft.DotNet.ILCompiler.LLVM.targets ]; then
   echo "NativeAOT-LLVM artifacts are not downloaded. Run src/cs/.scripts/llvm.sh." >&2
@@ -29,12 +33,8 @@ source ../../scripts/emscripten.sh
 [ -d node_modules ] || npm install
 
 rm -rf backend/bin backend/obj dist
-dotnet publish backend/Llvm.Exercise.csproj -c Release /p:BsLlvm=true "${RESOLVER[@]}"
+dotnet publish backend/Interleave.Harness.csproj -c Release /p:BsLlvm=true "${RESOLVER[@]}"
 
 [ "$1" = "--publish-only" ] && exit 0
-
-# The emitted module is publish output; type-checking it is the cheap half of the gate.
-npx wrangler types
-npx tsc --noEmit -p tsconfig.json
 
 node run.mjs

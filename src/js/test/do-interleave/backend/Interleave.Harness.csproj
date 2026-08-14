@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Interleave.Harness</RootNamespace>
+        <AssemblyName>Interleave.Harness</AssemblyName>
+        <BootsharpName>interleave</BootsharpName>
+        <BootsharpBinariesDirectory>$(MSBuildProjectDirectory)/../dist/wasm</BootsharpBinariesDirectory>
+        <BootsharpPublishDirectory>$(MSBuildProjectDirectory)/../dist/js</BootsharpPublishDirectory>
+        <BootsharpPackageDirectory>$(MSBuildProjectDirectory)/../dist</BootsharpPackageDirectory>
+        <!-- The whole point of the harness: the interleaving question is about the shipping
+             runtime, so it has to be answered on the NativeAOT-LLVM publish, not on Mono. -->
+        <BsLlvm>true</BsLlvm>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <InvariantTimezone>true</InvariantTimezone>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <EmccFlags>$(EmccFlags) -sENVIRONMENT=web -sDYNAMIC_EXECUTION=0</EmccFlags>
+        <IsAotCompatible>true</IsAotCompatible>
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <BsCfWorkerDirectory>$(MSBuildProjectDirectory)/../dist/worker</BsCfWorkerDirectory>
+        <BsCfTaskAssembly>$(MSBuildProjectDirectory)/../../../../cs/Bootsharp.Cloudflare.Publish/bin/$(Configuration)/net10.0/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Bootsharp" Version="*-*"/>
+    </ItemGroup>
+
+    <Import Project="../../../../cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets"/>
+
+</Project>

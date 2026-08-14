@@ -23,4 +23,9 @@ dotnet pack Bootsharp -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare.Publish -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare.AspNetCore -o .nuget -c Release
+dotnet pack Bootsharp.Cloudflare.SignalR -o .nuget -c Release
+# Packed so the layer is buildable and testable, NOT because it is shippable yet: under
+# NativeAOT-LLVM every reference-typed field of Microsoft's RenderTreeFrame reads back null, so
+# StaticHtmlRenderer cannot write HTML inside workerd. See ADR-0011 §2 and the milestone-6 report.
+dotnet pack Bootsharp.Cloudflare.Components -o .nuget -c Release
 dotnet restore

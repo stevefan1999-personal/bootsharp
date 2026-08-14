@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    The contained-toolchain hack every NativeAOT-LLVM lane needs, in ONE place (ADR-0006 §2).
+
+    Two facts drive it. First, this host's workload set is broken ("missing manifests likely removed
+    by package management"), and NativeAOT-LLVM needs no wasm-tools workload at all, so the resolver
+    is bypassed and the Emscripten packs are imported by path instead. Second, those packs are
+    versioned with the runtime, so a literal version breaks every LLVM publish in the repository the
+    moment the host's .NET patch level moves — it went 10.0.9 -> 10.0.11 mid-session and emcc stopped
+    being found everywhere at once. The version directory is matched with a wildcard: MSBuild expands
+    wildcards in Import, so whichever pack is installed is the one imported, and the guard sits on the
+    parent directory because a wildcard matching nothing is an error.
+
+    The resolver is bypassed ONLY when the packs can be imported by path, so a machine with a working
+    workload set (CI) resolves Emscripten the normal way and one with a broken set still links.
+    scripts/emscripten.sh applies the same directory test to the /p: flag it puts on the command line,
+    because the referenced library projects sit outside this file's directory scope — the two sides
+    have to agree, so they test the same thing.
+  -->
+
+  <PropertyGroup>
+    <_EmscriptenPacks>/usr/share/dotnet/packs/</_EmscriptenPacks>
+    <_EmscriptenSdkPack>$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64</_EmscriptenSdkPack>
+    <_EmscriptenNodePack>$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64</_EmscriptenNodePack>
+    <_EmscriptenCachePack>$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64</_EmscriptenCachePack>
+    <MSBuildEnableWorkloadResolver Condition="Exists('$(_EmscriptenSdkPack)')">false</MSBuildEnableWorkloadResolver>
+  </PropertyGroup>
+
+  <Import Project="$(_EmscriptenSdkPack)/*/Sdk/Sdk.props" Condition="Exists('$(_EmscriptenSdkPack)')"/>
+  <Import Project="$(_EmscriptenNodePack)/*/Sdk/Sdk.props" Condition="Exists('$(_EmscriptenNodePack)')"/>
+  <Import Project="$(_EmscriptenCachePack)/*/Sdk/Sdk.props" Condition="Exists('$(_EmscriptenCachePack)')"/>
+
+</Project>

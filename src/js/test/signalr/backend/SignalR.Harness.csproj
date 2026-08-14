@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>SignalR.Harness</RootNamespace>
+        <AssemblyName>SignalR.Harness</AssemblyName>
+        <BootsharpName>signalr</BootsharpName>
+        <BootsharpBinariesDirectory>$(MSBuildProjectDirectory)/../dist/wasm</BootsharpBinariesDirectory>
+        <BootsharpPublishDirectory>$(MSBuildProjectDirectory)/../dist/js</BootsharpPublishDirectory>
+        <BootsharpPackageDirectory>$(MSBuildProjectDirectory)/../dist</BootsharpPackageDirectory>
+        <!-- The claim under test is about the shipping runtime, so it is answered on the
+             NativeAOT-LLVM publish rather than on Mono — same rule as the do-interleave lane. -->
+        <BsLlvm>true</BsLlvm>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <InvariantTimezone>true</InvariantTimezone>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <EmccFlags>$(EmccFlags) -sENVIRONMENT=web -sDYNAMIC_EXECUTION=0</EmccFlags>
+        <IsAotCompatible>true</IsAotCompatible>
+        <!-- The whole AOT story of the reused JsonHubProtocol: with reflection off, its two
+             object?/Type JsonSerializer overloads resolve solely through
+             HubOptions.PayloadTypeInfoResolver. If that ever stopped being true, this harness is
+             where it would surface — as a NotSupportedException on the first client message. -->
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <BsCfWorkerDirectory>$(MSBuildProjectDirectory)/../dist/worker</BsCfWorkerDirectory>
+        <BsCfTaskAssembly>$(MSBuildProjectDirectory)/../../../../cs/Bootsharp.Cloudflare.Publish/bin/$(Configuration)/net10.0/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.SignalR/Bootsharp.Cloudflare.SignalR.csproj"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Bootsharp" Version="*-*"/>
+    </ItemGroup>
+
+    <!-- A PackageReference would import these from the packages' build/ folders; a ProjectReference
+         carries no such payload, so the harness imports them by hand. The SignalR targets is what
+         copies js/signalr.mjs next to the emitted module — without it the hand-written worker has
+         nothing to import its hibernation handlers from. -->
+    <Import Project="../../../../cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets"/>
+    <Import Project="../../../../cs/Bootsharp.Cloudflare.SignalR/Build/Bootsharp.Cloudflare.SignalR.targets"/>
+
+</Project>

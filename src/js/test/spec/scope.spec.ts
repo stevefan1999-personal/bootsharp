@@ -103,6 +103,22 @@ describe("while bootsharp is booted", () => {
         expect(instances.import(new Instanced("first"))).not.toStrictEqual(instances.import(new Instanced("second")));
     });
 
+    // The export direction of the same problem: C# hands JavaScript a callback for the duration of
+    // one host call, and only C# knows when it is done with. Releasing drops the proxy here, so the
+    // registry does not grow by one entry per call for the life of the isolate.
+    it("released exported instances are dropped and resolved again as a fresh proxy", () => {
+        class Exported { constructor(readonly _id: number) { } }
+        const id = -1000;
+        const proxy = instances.resolve(id, Exported);
+        expect(instances.resolve(id, Exported)).toBe(proxy);
+        instances.releaseExported(id);
+        expect(instances.resolve(id, Exported)).not.toBe(proxy);
+    });
+
+    it("releasing an unregistered exported id is ignored", () => {
+        expect(() => instances.releaseExported(-1001)).not.toThrow();
+    });
+
     it("a second tracker is rejected", () => {
         instances.trackImported(() => { });
         expect(() => instances.trackImported(() => { })).toThrow(/already installed/);

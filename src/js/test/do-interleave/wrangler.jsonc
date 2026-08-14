@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bootsharp-do-interleave",
+  // Hand-written, unlike every other lane: it adds the hibernation WebSocket and alarm handlers
+  // the Durable Object generator does not project yet, around the generated module it imports.
+  "main": "worker/harness.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": false },
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "vars": {
+    "ENVIRONMENT": "test"
+  },
+  "kv_namespaces": [
+    // Placeholder id: `wrangler dev --local` simulates KV and never reads it. This is the
+    // "binding call" a hub method awaits in scenario 1 — deliberately not DO storage.
+    { "binding": "KV", "id": "00000000000000000000000000000000" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "HUB", "class_name": "Hub" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Hub"] }
+  ]
+}

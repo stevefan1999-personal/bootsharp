@@ -1,0 +1,58 @@
+[
+  {
+    "scenario": "negotiate",
+    "pass": true,
+    "body": {
+      "negotiateVersion": 1,
+      "connectionId": "c5019969-1ab8-4394-85bd-4fb82b0f42dc",
+      "connectionToken": "c5019969-1ab8-4394-85bd-4fb82b0f42dc",
+      "availableTransports": [
+        {
+          "transport": "WebSockets",
+          "transferFormats": [
+            "Text"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "scenario": "handshakeAndInvoke",
+    "pass": true,
+    "echoed": "hello wire",
+    "sum": 42,
+    "who": "0e81d230-91cc-4157-a296-00b525c95556",
+    "renamed": "case insensitive",
+    "transport": "WebSocketTransport"
+  },
+  {
+    "scenario": "hubException",
+    "pass": true,
+    "message": "refused by contract"
+  },
+  {
+    "scenario": "broadcast",
+    "pass": true,
+    "heard": [
+      "second:alice:hi everyone",
+      "first:alice:hi everyone"
+    ]
+  },
+  {
+    "scenario": "groups",
+    "pass": true,
+    "heard": [
+      "member:members only"
+    ]
+  },
+  {
+    "scenario": "hibernationWake",
+    "pass": true,
+    "before": 1,
+    "after": 2,
+    "idBefore": "f70c5c0c-7fdf-4443-9c34-4da868bb6aaf",
+    "idAfter": "f70c5c0c-7fdf-4443-9c34-4da868bb6aaf",
+    "dropped": [],
+    "idleMs": 14000
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bootsharp-signalr",
+  // Hand-written, like the do-interleave lane: workerd reserves fetch/webSocketMessage/
+  // webSocketClose/webSocketError/alarm as prototype members and the entrypoint generator refuses
+  // to project onto them, so the hibernation handlers come from the shipped js/signalr.mjs and this
+  // module is where the two halves are joined.
+  "main": "worker/harness.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": false },
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "vars": {
+    "ENVIRONMENT": "test"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHAT", "class_name": "ChatRoomHub" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ChatRoomHub"] }
+  ]
+}
