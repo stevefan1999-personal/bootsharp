@@ -91,7 +91,9 @@ internal static class CsEmitter
         // app's, and this dispatch only needs the Run contract it carries.
         b.AppendLine($"        if (actor.Instance is not {library}.IWorkflowEntrypoint workflow)");
         b.AppendLine("            throw new System.InvalidOperationException($\"Actor {id} is not a workflow.\");");
-        b.AppendLine($"        await workflow.Run(new {library}.WorkflowEvent(payloadJson), step);");
+        // Wrapped, never handed over raw: the wrapper releases the delegate each step exports, which
+        // is otherwise registered for the life of the isolate (see ReleasingWorkflowStep).
+        b.AppendLine($"        await workflow.Run(new {library}.WorkflowEvent(payloadJson), new {library}.ReleasingWorkflowStep(step));");
         b.AppendLine("        return \"null\";");
         b.AppendLine("    }");
         b.AppendLine("}");

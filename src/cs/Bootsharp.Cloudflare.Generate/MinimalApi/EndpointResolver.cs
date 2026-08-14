@@ -105,7 +105,7 @@ internal static class EndpointResolver
         if (Argument(operation, "handler") is not { } handlerArgument) return null;
         if (Handler(handlerArgument.Value) is not { } handler)
         {
-            defects.Add(new Defect("CFW026", "Route handler is not a lambda or method group",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"'{mapMethod}' needs a handler whose signature is known when the app is compiled: a " +
                 "lambda, a local function or a method group. A value of a delegate type cannot be bound " +
                 "here, and there is no reflection-based binder to fall back to on this platform.",
@@ -191,7 +191,7 @@ internal static class EndpointResolver
         var at = LocationInfo.From(symbol) ?? location;
         if (symbol.RefKind != RefKind.None)
         {
-            defects.Add(new Defect("CFW026", "Unsupported route handler parameter",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"Parameter '{symbol.Name}' is passed by reference, which a bound handler cannot be.", at));
             return null;
         }
@@ -205,7 +205,7 @@ internal static class EndpointResolver
         var defaultExpression = symbol.HasExplicitDefaultValue ? symbol.GetDefaultValueString() : null;
         if (attribute.Form)
         {
-            defects.Add(new Defect("CFW026", "Unsupported binding source",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"Parameter '{symbol.Name}' binds from a form. A worker request arrives as a buffered " +
                 "body with no multipart or urlencoded reader in this package, so form " +
                 "binding would have to be invented rather than bound. Read the body as JSON instead.", at));
@@ -236,7 +236,7 @@ internal static class EndpointResolver
             return Bound(symbol, source.Value, symbol.Name, optional, at);
         if (source is null)
         {
-            defects.Add(new Defect("CFW026", "Unsupported route handler parameter",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"Parameter '{symbol.Name}' of type '{symbol.Type.ToDisplayString()}' has no binding source " +
                 "this package can infer: it is not a route parameter of the pattern, it is not parsable from " +
                 "a string, and its method never carries a body. Mark it [FromServices] if it is a service, " +
@@ -245,7 +245,7 @@ internal static class EndpointResolver
         }
         if (!parsable)
         {
-            defects.Add(new Defect("CFW026", "Unsupported route handler parameter",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"Parameter '{symbol.Name}' binds from the {Describe(source.Value)}, which is text, but " +
                 $"'{value.ToDisplayString()}' cannot be parsed from a string — it has no TryParse, does not " +
                 "implement IParsable<T> and is not an enum.", at));
@@ -253,7 +253,7 @@ internal static class EndpointResolver
         }
         if (isArray && source == BindingSource.Route)
         {
-            defects.Add(new Defect("CFW026", "Unsupported route handler parameter",
+            defects.Add(new Defect("CFW026", "Unsupported route handler",
                 $"Parameter '{symbol.Name}' is an array bound from the route, but a route value is a single " +
                 "string. Bind arrays from the query string or a header.", at));
             return null;

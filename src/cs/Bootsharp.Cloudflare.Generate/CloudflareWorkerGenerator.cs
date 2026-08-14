@@ -60,10 +60,34 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
         var defects = new List<Defect>();
         foreach (var method in symbol.GetMembers().OfType<IMethodSymbol>().Where(IsProjectable))
             Project(kind, method, dispatches, defects);
+        // A hub-hosting Durable Object inherits its transport surface rather than declaring it, and
+        // GetMembers() returns declared members only — so without this its JavaScript half would
+        // call four methods that were never emitted. See SignalR/HubRules.Transport.
+        if (HostsHub(symbol)) dispatches.AddRange(HubTransport());
         var space = symbol.ContainingNamespace.IsGlobalNamespace ? "" : symbol.ContainingNamespace.ToDisplayString();
         var entrypoint = new Entrypoint(kind, symbol.Name, space, new(dispatches.Select(static d => d.Method)));
         return new Resolution(entrypoint, new(dispatches), new(defects), LocationInfo.From(symbol));
     }
+
+    /// <summary>Whether the class derives from <c>HubDurableObject&lt;THub, TEnv&gt;</c>.</summary>
+    private static bool HostsHub (INamedTypeSymbol symbol) => Rules.HostsHub(Bases(symbol));
+
+    /// <summary>Full names of every base, on the unbound name — a symbol's name carries no arity.</summary>
+    private static IEnumerable<string> Bases (INamedTypeSymbol symbol)
+    {
+        for (var type = symbol.BaseType; type is not null; type = type.BaseType)
+            yield return FullName(type);
+    }
+
+    /// <summary>
+    /// The four inherited transport methods, projected exactly as if they had been declared: they
+    /// are ordinary RPC shapes, which is what lets the SignalR hosting glue reuse the entrypoint
+    /// pipeline instead of adding a second one.
+    /// </summary>
+    private static IEnumerable<Dispatch> HubTransport () =>
+        Rules.HubTransports.Select(static m => new Dispatch(
+            new Method(m.CsName, m.JsName, "rpc", m.Return, m.Await),
+            new(m.Parameters.Select(static p => new Parameter(p.Name, p.Kind, null)))));
 
     private static bool IsProjectable (IMethodSymbol method) =>
         method.MethodKind == MethodKind.Ordinary

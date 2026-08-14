@@ -158,7 +158,7 @@ public sealed class MinimalApiGenerator : IIncrementalGenerator
                 parameters.Add(parameter with { Source = BindingSource.JsonBody });
             else
             {
-                defects.Add(new Defect("CFW026", "Unsupported route handler parameter",
+                defects.Add(new Defect("CFW026", "Unsupported route handler",
                     $"Parameter '{parameter.Name}' of type '{parameter.Type}' has no binding source: it is " +
                     "not a route parameter of the pattern, it cannot be parsed from a string, this endpoint's " +
                     "methods carry no body, and no registration in this project makes it a service. Mark it " +

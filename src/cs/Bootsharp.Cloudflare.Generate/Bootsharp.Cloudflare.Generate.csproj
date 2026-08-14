@@ -15,4 +15,14 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- The HTML context scanner is the one thing the writer's two halves must agree on
+             exactly: it decides whether a hole is element content, an attribute value, a URL or a
+             position no encoding can rescue. The runtime handler runs it per render, this generator
+             runs it per build, and linking the source (rather than reimplementing it here, as a
+             netstandard2.0 analyzer that cannot reference the net10.0 package) is what makes "the
+             same decision" true by construction rather than by review. ADR-0011 §1. -->
+        <Compile Include="../Bootsharp.Cloudflare.AspNetCore/Html/HtmlContextScanner.cs" LinkBase="Html"/>
+    </ItemGroup>
+
 </Project>
