@@ -73,3 +73,32 @@ jobs:
           bash ./.scripts/pack.sh
           cd ../js
           npm run test:llvm
+
+  # Bootsharp.Cloudflare.AspNetCore carries 140 files copied verbatim from dotnet/aspnetcore, with
+  # every local change expressed as a declarative transform in Vendored/manifest.json rather than as
+  # an edit in the tree (ADR-0008 §3, research/09 §10). That only holds if something re-renders them
+  # and compares: an edit made directly to a vendored file, or a transform whose anchor upstream
+  # moved, is otherwise invisible until the next manual bump.
+  #
+  # The clone is filtered and sparse — the two source subtrees the manifest names, ~27 MB and a few
+  # seconds, not the ~2 GB full history — and is pinned to the manifest's own commit, so this job
+  # answers "does the tree still match what the manifest says it is", never "did upstream change".
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: check vendored sources for drift
+        run: |
+          cd src/cs/Bootsharp.Cloudflare.AspNetCore
+          commit=$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("Vendored/manifest.json")).commit)')
+          mkdir -p /tmp/aspnetcore && cd /tmp/aspnetcore
+          git init -q .
+          git remote add origin https://github.com/dotnet/aspnetcore.git
+          git sparse-checkout set --no-cone "src/Http" "src/Shared"
+          git fetch --filter=blob:none --depth 1 origin "$commit"
+          git checkout -q FETCH_HEAD
+          cd "$GITHUB_WORKSPACE/src/cs/Bootsharp.Cloudflare.AspNetCore"
+          deno run -A Vendored/vendor.ts --check --upstream /tmp/aspnetcore
