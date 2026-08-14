@@ -626,10 +626,14 @@ export function toResponse (result) {
   // was both indistinguishable from an unset snapshot and illegal in a Response.
   if (result.passThroughToAssets) return null;
   // Bytes when the guest sent bytes — the layer's own snapshot always does, so text is only the
-  // path a hand-written entrypoint takes.
-  const body = result.bodyBytes ?? result.body;
-  return new Response(body, { status: result.status, headers: toHeaders(result.headersJson) });
+  // path a hand-written entrypoint takes. RFC 9110 forbids a content body on 204/205/304; workerd
+  // warns if even an empty string is passed, which is what the C# snapshot carries for NoContent.
+  const status = result.status;
+  const body = nullBody.has(status) ? null : (result.bodyBytes ?? result.body);
+  return new Response(body, { status, headers: toHeaders(result.headersJson) });
 }
+
+const nullBody = new Set([204, 205, 304]);
 
 // Fast path that answers static assets without paying for a.NET boot. The prefixes come from the
 // app's [assembly: WorkerAssets(...)] declaration, projected into the emitted module — this file
