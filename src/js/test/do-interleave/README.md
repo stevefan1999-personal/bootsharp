@@ -103,12 +103,17 @@ A handler looping over `Ctx.Storage.Get` sometimes died with
 longer resolved an *isolate-scoped* handle id. The `st`/`sp` pair is the controlled A/B: identical
 20,000 reads, differing only in whether the `Ctx.Storage` property is read once or per iteration.
 
-| path | observations | failures | when |
-| --- | --- | --- | --- |
-| `st` — handle hoisted once | 9 | 0 | before the fix |
-| `sp` — property re-read per iteration | 9 | **2** | before the fix |
-| `st` — handle hoisted once | 25 | 0 | after the fix |
-| `sp` — property re-read per iteration | 25 | **0** | after the fix |
+| path | build | observations | failures | when |
+| --- | --- | --- | --- | --- |
+| `st` — handle hoisted once | pre-fix | 9 | 0 | 2026-08-13 |
+| `sp` — property re-read per iteration | pre-fix | 9 | **2** | 2026-08-13 |
+| `st` — handle hoisted once | fixed | 25 | 0 | 2026-08-14 |
+| `sp` — property re-read per iteration | fixed | 25 | 0 | 2026-08-14 |
+| `sp` — property re-read per iteration | **pre-fix, re-measured** | 25 | **0** | 2026-08-14 |
+
+Read the last row before the ones above it. **The 2026-08-14 numbers discriminate nothing**: the
+defect no longer reproduces on the *pre-fix* build either, so the post-fix zero is a no-regression
+result and not evidence that the fix works. See "What the numbers do and do not show" below.
 
 The asymmetry was the evidence and the intermittency said the trigger was GC timing, but the
 original hypothesis recorded here — *"many C# proxies over one JavaScript object, and the first one
@@ -132,19 +137,44 @@ Two distinct windows were actually open, and both are now closed:
    generated proxy member now keeps the proxy alive across its interop call
    (`JSProxy.Alive`/`GC.KeepAlive`).
 
-After both: 25 consecutive `sp` runs with zero failures, completing all 20,000 iterations in
-162-217 ms against the hoisted control's 184-329 ms — where before the fix the failing runs aborted
-at roughly 2,800 iterations. At the recorded pre-fix rate of 2/9, seeing 0 failures in 25 runs has
-probability ≈0.2%; 25 runs bound the post-fix rate below ~11% at 95% confidence, so this is strong
-evidence rather than proof of zero. A separate control ran 20 full `st`+`sp` cycles inside **one**
-isolate (800,000 storage reads) with zero failures, which also rules out a per-import leak.
+#### What the numbers do and do not show
 
-Hoisting the handle is therefore no longer a correctness requirement, only a performance one: 20,000
-re-reads still cost 20,000 JS `import` calls. This landed on SignalR directly — a
-`DurableObjectHubLifetimeManager` reaches through `Ctx.Storage` and `ctx.getWebSockets()` on every
-send.
+The 2026-08-14 campaign was run on both builds, the same way, on one machine. The pre-fix arm is a
+worktree at the commit before the fix, packed into its own NuGet cache and verified genuinely
+pre-fix (no `Alive(` wrapper in any generated proxy member; the old one-argument
+`disposeImported`). Every observation below is zero failures:
 
-One caveat for whoever re-runs this: the lane keeps its miniflare state in the harness directory, so
-two `wrangler dev` instances started from it interfere. A concurrent run is the known cause of the
-occasional `"/burst/report answered 500: Network connection lost"` — a host-level artifact, not a
-guest failure, and distinguishable because both handlers still ack and no `cs:throw` is recorded.
+| build | protocol | observations |
+| --- | --- | --- |
+| pre-fix | `sp20000`, scenario in isolation | 25 |
+| pre-fix | full 11-scenario suite | 12 |
+| pre-fix | `sp` at 20,000 / 100,000 / 500,000 reads | 3 each |
+| pre-fix | `sp100000` concurrent with a heap-churning `kv20000` handler | 10 |
+| fixed | `sp20000`, scenario in isolation | 25 |
+| fixed | full 11-scenario suite | 12 |
+
+So the harness cannot currently tell the two builds apart. Whatever GC timing produced 2 of 9 on
+2026-08-13 is not being hit today — plausibly because a `sp` loop allocates little beyond its Tasks,
+and on a guest heap that never fills there is no collection, and therefore no race to lose. Treat
+the post-fix zeros as a **no-regression check**: the fixed build does everything the pre-fix build
+does, at the same cost (all 20,000 iterations, 162-217 ms in isolation, against the hoisted
+control's 184-329 ms).
+
+The fix rests on evidence that does not depend on reproducing the race: the deterministic tests that
+fail before and pass after (Bootsharp.Common.Test, Bootsharp.Publish.Test, and three JS spec cases),
+the in-worker registry instrumentation that caught an id evicted at zero with a call already in
+flight, and the mechanism being readable in the code. Nothing measured here contradicts the
+mechanism — only the failure rate that was used to demonstrate it.
+
+Hoisting the handle is no longer a correctness requirement, only a performance one: 20,000 re-reads
+still cost 20,000 JS `import` calls and 20,000 refcount increments. This landed on SignalR directly
+— a `DurableObjectHubLifetimeManager` reaches through `Ctx.Storage` and `ctx.getWebSockets()` on
+every send.
+
+Two host-level artifacts for whoever re-runs this, neither of them a guest failure. The lane keeps
+its miniflare state in the harness directory, so two `wrangler dev` instances started from it
+interfere — that is one cause of an occasional `"/burst/report answered 500: Network connection
+lost"`. The other is miniflare's own local Durable Object storage, which raises
+`NOSENTRY database is locked: SQLITE_BUSY` under repeated 20,000-read bursts. Both are
+distinguishable from the defect the same way: both handlers still ack, and no `cs:throw` is
+recorded.

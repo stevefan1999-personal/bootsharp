@@ -31,7 +31,7 @@
     "check": "d1Grid",
     "pass": true,
     "status": 200,
-    "body": "{\"columns\":[\"id\",\"body\",\"created_at\"],\"rows\":[[23,\"d1-smoke\",\"2026-08-14 09:02:5"
+    "body": "{\"columns\":[\"id\",\"body\",\"created_at\"],\"rows\":[[31,\"d1-smoke\",\"2026-08-14 10:53:3"
   },
   {
     "check": "freeSql",
@@ -48,14 +48,14 @@
   {
     "check": "durableObject",
     "pass": true,
-    "before": 16,
-    "after": 18
+    "before": 21,
+    "after": 23
   },
   {
     "check": "durableObjectSql",
     "pass": true,
     "status": 200,
-    "body": "{\"orm\":\"do-sql\",\"rows\":[[15]]}"
+    "body": "{\"orm\":\"do-sql\",\"rows\":[[18]]}"
   },
   {
     "check": "queue",
@@ -67,13 +67,13 @@
     "check": "workflow",
     "pass": true,
     "status": 303,
-    "location": "/?flash=workflow-6ececfd1-3281-4bc5-935c-70b9e2c2f68f"
+    "location": "/?flash=workflow-8baa0c66-fd2e-49cd-8d8f-0cc354b506fb"
   },
   {
     "check": "typedRouteParameter",
     "pass": true,
     "created": 201,
-    "location": "/api/notes/25",
+    "location": "/api/notes/33",
     "one": 200,
     "wrongType": 404
   },
@@ -134,13 +134,13 @@
     "check": "cron",
     "pass": true,
     "fired": 200,
-    "heartbeat": "{\"lastScheduled\":{\"cron\":\"*/15 * * * *\",\"scheduledTime\":1786698176926,\"scheduledAt\":\"2026-08-14T09:02:56.9260000+00:00\"}}"
+    "heartbeat": "{\"lastScheduled\":{\"cron\":\"*/15 * * * *\",\"scheduledTime\":1786704815510,\"scheduledAt\":\"2026-08-14T10:53:35.5100000+00:00\"}}"
   },
   {
     "check": "chatHub",
     "pass": true,
     "transport": "WebSocketTransport",
-    "who": "737e88f0-4a96-495f-be85-3b45f32680fe",
+    "who": "2db2b81b-611e-48ea-91f2-fe4da451626e",
     "broadcast": 2,
     "refused": "refused by contract"
   }

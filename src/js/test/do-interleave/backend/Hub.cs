@@ -190,8 +190,10 @@ public sealed class Hub : IHub
                 // Same reads, but re-reading the handle property on every iteration — the half of
                 // the A/B that used to intermittently die with
                 // "TypeError: Cannot read properties of undefined (reading 'get')" (2 of 9 runs,
-                // against 0 of 9 for the hoisted path above), and now does not (0 of 25). The
-                // earlier hypothesis recorded here — several C# proxies racing to dispose one
+                // against 0 of 9 for the hoisted path above). It no longer fails (0 of 25) — but
+                // neither does the pre-fix build when re-measured (also 0 of 25), so that is a
+                // no-regression result, not a demonstration. The earlier hypothesis recorded here
+                // — several C# proxies racing to dispose one
                 // shared id — is refuted: Instances.Resolve caches weakly BY ID, so there is only
                 // ever one proxy and one finalizer per id. The two real causes were a registry that
                 // did not refcount its hand-offs, and a proxy the precise GC could finalize between
