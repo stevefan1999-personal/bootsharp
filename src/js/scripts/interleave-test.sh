@@ -12,9 +12,15 @@
 # src/cs/.scripts/pack.sh (the Bootsharp packages the harness restores).
 #
 # Pass --publish-only to stop after the publish, for iterating on the worker by hand.
+# BS_INTERLEAVE_ORIGIN=https://… skips the publish and wrangler dev; the driver talks to that origin.
 set -e
 
 cd "$(dirname "$0")/../test/do-interleave"
+
+if [ -n "${BS_INTERLEAVE_ORIGIN:-}" ]; then
+  node run.mjs
+  exit
+fi
 
 if [ ! -f ../../../cs/.llvm/microsoft.dotnet.ilcompiler.llvm/build/Microsoft.DotNet.ILCompiler.LLVM.targets ]; then
   echo "NativeAOT-LLVM artifacts are not downloaded. Run src/cs/.scripts/llvm.sh." >&2

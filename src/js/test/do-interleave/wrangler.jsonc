@@ -1,12 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bootsharp-do-interleave",
+  // Probe name: deploy as bootsharp-do-interleave-probe so a workers.dev URL never collides
+  // with samples/cloudflare (bootsharp-cloudflare). Local `wrangler dev --local` only uses this
+  // as a label. workers_dev is on so `wrangler deploy` gets a *.workers.dev origin for the
+  // production hibernation measurement; it does not affect --local.
+  "name": "bootsharp-do-interleave-probe",
   // Hand-written, unlike every other lane: it adds the hibernation WebSocket and alarm handlers
   // the Durable Object generator does not project yet, around the generated module it imports.
   "main": "worker/harness.ts",
   "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  "workers_dev": true,
   "observability": { "enabled": false },
   "rules": [
     { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
@@ -15,9 +19,9 @@
     "ENVIRONMENT": "test"
   },
   "kv_namespaces": [
-    // Placeholder id: `wrangler dev --local` simulates KV and never reads it. This is the
-    // "binding call" a hub method awaits in scenario 1 — deliberately not DO storage.
-    { "binding": "KV", "id": "00000000000000000000000000000000" }
+    // Probe-only namespace (bootsharp-do-interleave-probe). Local `wrangler dev --local`
+    // simulates KV regardless of the id. Binding name is KV because IHarnessEnv.KV projects it.
+    { "binding": "KV", "id": "ea6d0b65620e4a18b2bc3283674008fc" }
   ],
   "durable_objects": {
     "bindings": [

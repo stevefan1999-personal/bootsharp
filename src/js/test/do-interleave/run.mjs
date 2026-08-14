@@ -11,51 +11,106 @@
 
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { existsSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.BS_INTERLEAVE_PORT ?? 8794);
-const origin = `http://127.0.0.1:${port}`;
+// Production probe: BS_INTERLEAVE_ORIGIN=https://bootsharp-do-interleave-probe.<sub>.workers.dev
+// skips wrangler entirely and drives the requested scenarios against that origin. Local default
+// is unchanged — spawn wrangler dev --local on 8794.
+const remoteOrigin = process.env.BS_INTERLEAVE_ORIGIN?.replace(/\/$/, "") || "";
+const origin = remoteOrigin || `http://127.0.0.1:${port}`;
+const remote = Boolean(remoteOrigin);
 const bootTimeoutMs = 180_000;
+const settleTimeoutMs = Number(process.env.BS_INTERLEAVE_SETTLE_MS ?? (remote ? 90_000 : 40_000));
 // SignalR's keepalive frame verbatim: {"type":6} plus the 0x1E record separator. Byte-identical to
 // what the harness hands setWebSocketAutoResponse, because workerd matches by exact string equality.
 const PING = '{"type":6}\x1e';
+const lockPath = resolve(root, ".interleave.lock");
 
-if (!existsSync(resolve(root, "dist/worker/entrypoints.ts"))) {
+if (!remote && !existsSync(resolve(root, "dist/worker/entrypoints.ts"))) {
   console.error("interleave harness: not published. Run src/js/scripts/interleave-test.sh.");
   process.exit(1);
 }
 
-// A leftover worker from an earlier run answers /ready just as well as ours does, and then every
-// scenario runs against actors whose state carries the previous run's trace. That contaminates
-// results silently, which is worse than failing, so refuse to start on a busy port.
-try {
-  const stale = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(1500) });
-  if (stale.status > 0) {
-    console.error(`interleave harness: something is already serving ${origin}. `
-      + "Kill it (or set BS_INTERLEAVE_PORT) before running.");
-    process.exit(1);
-  }
-} catch { /* nothing listening, which is what we want */ }
-
-// Own process group, so the kill at the end takes wrangler's workerd child with it rather than
-// leaving it bound to the port for the next run to trip over.
-const worker = spawn(
-  "npx", ["wrangler", "dev", "--local", "--port", String(port), "--inspector-port", String(port + 100)],
-  { cwd: root, stdio: ["ignore", "pipe", "pipe"], detached: true, env: { ...process.env, CI: "1" } });
-
-const log = [];
-for (const stream of [worker.stdout, worker.stderr])
-  stream.on("data", chunk => log.push(chunk.toString()));
+// The port check below only sees whatever is bound to THIS port. A second run with
+// BS_INTERLEAVE_PORT still shares the harness directory's default miniflare sqlite, and the two
+// workerd processes step on each other's Durable Objects — the source of the spurious "Network
+// connection lost" 500s. The lock is per-directory so that case fails immediately. A leftover
+// lock from a dead pid is taken over; a live holder is not. Remote runs do not start workerd.
+if (!remote) acquireLock();
 
 const findings = [];
 let exitCode = 1;
+let persistDir;
+let worker;
+const log = [];
 try {
-  await waitForReady();
-  // One scenario failing must not cost the others: each is an independent observation, and a
-  // harness that reports nine results and one error is more useful than one that reports nothing.
+  if (remote) {
+    console.log(`interleave harness: remote origin ${origin} (no wrangler dev)`);
+    await waitForReady();
+    await runScenarios();
+    writeFileSync(resolve(root, "findings.json"), JSON.stringify(findings, null, 2));
+    report();
+    exitCode = 0;
+  } else {
+    // A leftover worker from an earlier run answers /ready just as well as ours does, and then every
+    // scenario runs against actors whose state carries the previous run's trace. That contaminates
+    // results silently, which is worse than failing, so refuse to start on a busy port.
+    let taken = false;
+    try {
+      const stale = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(1500) });
+      taken = stale.status > 0;
+    } catch { /* nothing listening, which is what we want */ }
+    if (taken) {
+      console.error(`interleave harness: something is already serving ${origin}. `
+        + "Kill it (or set BS_INTERLEAVE_PORT) before running.");
+    } else {
+      // wrangler defaults persist-to to.wrangler/state in this directory. A unique tmpdir per run
+      // means two workerd processes never share DO / KV sqlite, even if someone launches wrangler
+      // by hand alongside the driver.
+      persistDir = mkdtempSync(join(tmpdir(), "bs-interleave-"));
+
+      // Own process group, so the kill at the end takes wrangler's workerd child with it rather than
+      // leaving it bound to the port for the next run to trip over.
+      worker = spawn(
+        "npx",
+        ["wrangler", "dev", "--local", "--port", String(port), "--inspector-port", String(port + 100),
+          "--persist-to", persistDir],
+        { cwd: root, stdio: ["ignore", "pipe", "pipe"], detached: true, env: { ...process.env, CI: "1" } });
+
+      for (const stream of [worker.stdout, worker.stderr])
+        stream.on("data", chunk => log.push(chunk.toString()));
+
+      await waitForReady();
+      await runScenarios();
+      writeFileSync(resolve(root, "findings.json"), JSON.stringify(findings, null, 2));
+      report();
+      exitCode = 0;
+    }
+  }
+} catch (error) {
+  console.error(`interleave harness: ${error?.stack ?? error}`);
+  if (log.length) console.error(log.join(""));
+} finally {
+  if (worker?.pid) {
+    try { process.kill(-worker.pid, "SIGTERM"); } catch { /* already gone */ }
+    await Promise.race([new Promise(done => worker.once("exit", done)), sleep(4000)]);
+    try { process.kill(-worker.pid, "SIGKILL"); } catch { /* already gone */ }
+  }
+  if (persistDir) {
+    try { rmSync(persistDir, { recursive: true, force: true }); } catch { /* already gone */ }
+  }
+  if (!remote) releaseLock();
+}
+process.exit(exitCode);
+
+// One scenario failing must not cost the others: each is an independent observation, and a
+// harness that reports nine results and one error is more useful than one that reports nothing.
+async function runScenarios () {
   const only = process.env.BS_INTERLEAVE_ONLY?.split(",");
   for (const scenario of [sameSocketMicrotask, crossSocketBinding, sameSocketBinding,
     sameSocketStorage, sameSocketStorageControl, storageHandleReread, mixedStorageThenBinding,
@@ -73,18 +128,7 @@ try {
       console.error(`scenario ${scenario.name} failed: ${error?.stack ?? error}`);
     }
   }
-  writeFileSync(resolve(root, "findings.json"), JSON.stringify(findings, null, 2));
-  report();
-  exitCode = 0;
-} catch (error) {
-  console.error(`interleave harness: ${error?.stack ?? error}`);
-  console.error(log.join(""));
-} finally {
-  try { process.kill(-worker.pid, "SIGTERM"); } catch { /* already gone */ }
-  await Promise.race([new Promise(done => worker.once("exit", done)), sleep(4000)]);
-  try { process.kill(-worker.pid, "SIGKILL"); } catch { /* already gone */ }
 }
-process.exit(exitCode);
 
 // --- scenarios ---------------------------------------------------------------------------------
 
@@ -306,7 +350,12 @@ async function alarmMidAwait () {
 }
 
 async function hibernationWake () {
-  const scope = "hibernate";
+  // Remote repeats must not share a Durable Object with a previous run — isolate statics and the
+  // scope trace would otherwise accumulate. Local keeps the historical "hibernate" name because
+  // each local run starts a fresh workerd.
+  const scope = process.env.BS_INTERLEAVE_SCOPE
+    ?? (remote ? `hibernate-${Date.now()}` : "hibernate");
+  const idleMs = Number(process.env.BS_INTERLEAVE_HIBERNATE_MS ?? 14_000);
   const socket = await open(scope, "h");
   await send(socket, "h1|kv1");
   await settle(socket, 1);
@@ -314,14 +363,17 @@ async function hibernationWake () {
   // workerd's local actor container evicts after 10 s of inactivity and hibernates the accepted
   // sockets on the way out (server.c++ handleShutdown). 14 s is that plus margin; the socket is
   // deliberately idle, and the auto-response pair is never exercised here, so nothing keeps the
-  // actor alive.
-  await sleep(14_000);
+  // actor alive. Production may need a longer idle — set BS_INTERLEAVE_HIBERNATE_MS (70000 / 120000).
+  await sleep(idleMs);
   await send(socket, "h2|kv1");
   await settle(socket, 1);
   const after = await snapshot(scope);
   socket.close();
   return {
-    scenario: "hibernation wake mid-conversation (14 s idle, same socket)",
+    scenario: `hibernation wake mid-conversation (${idleMs / 1000} s idle, same socket)`,
+    origin,
+    scope,
+    idleMs,
     actorRebuilt: after.js.incarnation > before.js.incarnation,
     incarnationBefore: before.js.incarnation,
     incarnationAfter: after.js.incarnation,
@@ -342,6 +394,61 @@ async function hibernationWake () {
 }
 
 // --- plumbing ----------------------------------------------------------------------------------
+
+function acquireLock () {
+  for (;;) {
+    try {
+      const fd = openSync(lockPath, "wx");
+      try { writeSync(fd, `${process.pid}\n`); }
+      catch (error) {
+        try { unlinkSync(lockPath); } catch { /* keep the write error */ }
+        throw error;
+      }
+      finally { closeSync(fd); }
+      return;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const holder = lockHolderPid();
+      if (holder != null && pidAlive(holder)) {
+        console.error(`interleave harness: already running as pid ${holder}. `
+          + "Kill it before running again — BS_INTERLEAVE_PORT does not isolate the two.");
+        process.exit(1);
+      }
+      try { unlinkSync(lockPath); }
+      catch (unlinkError) {
+        if (unlinkError.code !== "ENOENT") throw unlinkError;
+      }
+    }
+  }
+}
+
+function releaseLock () {
+  try {
+    if (lockHolderPid() !== process.pid) return;
+    unlinkSync(lockPath);
+  } catch { /* already gone, or we never held it */ }
+}
+
+function lockHolderPid () {
+  try {
+    const parsed = Number.parseInt(readFileSync(lockPath, "utf8"), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+// kill(pid, 0) throws ESRCH only when nothing has that pid. EPERM means the process exists but
+// we cannot signal it — still a live holder.
+function pidAlive (pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code !== "ESRCH";
+  }
+}
 
 // One message whose only job is to price a storage read on this machine, so the storage scenario's
 // 30 steps take about 15 ms each — the same per-step cost as its host-timer control, which is what
@@ -411,7 +518,8 @@ function snapshot (scope) { return control(scope, "/report"); }
 
 function open (scope, conn) {
   return new Promise((done, fail) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/${scope}/ws?conn=${conn}`);
+    const wsOrigin = origin.replace(/^http/, "ws");
+    const socket = new WebSocket(`${wsOrigin}/${scope}/ws?conn=${conn}`);
     socket.acks = 0;
     socket.pings = 0;
     socket.frames = [];
@@ -432,7 +540,7 @@ async function send (socket, program) {
 }
 
 async function settle (socket, acks) {
-  const deadline = Date.now() + 40_000;
+  const deadline = Date.now() + settleTimeoutMs;
   while (socket.acks < acks) {
     if (Date.now() > deadline) throw Error(`socket did not ack ${acks} messages (got ${socket.acks})`);
     await sleep(20);
@@ -453,14 +561,20 @@ async function settleEcho (socket, pings) {
 async function waitForReady () {
   const deadline = Date.now() + bootTimeoutMs;
   while (Date.now() < deadline) {
-    if (worker.exitCode != null) throw Error(`wrangler exited with ${worker.exitCode}:\n${log.join("")}`);
+    if (worker?.exitCode != null) throw Error(`wrangler exited with ${worker.exitCode}:\n${log.join("")}`);
     try {
       const response = await fetch(`${origin}/ready`);
       if (response.status === 200) return;
-    } catch { /* not listening yet */ }
+      if (remote) throw Error(`remote origin ${origin}/ready answered ${response.status}`);
+    } catch (error) {
+      if (remote && error instanceof Error && error.message.startsWith("remote origin")) throw error;
+      /* not listening yet, or a transient remote blip before the first success */
+    }
     await sleep(250);
   }
-  throw Error(`wrangler dev did not start within ${bootTimeoutMs} ms:\n${log.join("")}`);
+  throw Error(remote
+    ? `remote origin ${origin}/ready did not answer 200 within ${bootTimeoutMs} ms`
+    : `wrangler dev did not start within ${bootTimeoutMs} ms:\n${log.join("")}`);
 }
 
 function report () {

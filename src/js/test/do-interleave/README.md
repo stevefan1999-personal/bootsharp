@@ -42,6 +42,19 @@ src/js/scripts/interleave-test.sh
 `--publish-only` stops after the NativeAOT-LLVM publish. `BS_INTERLEAVE_ONLY=name[,name]` runs a
 subset; `BS_INTERLEAVE_PORT` moves the port. Full traces land in `findings.json`.
 
+To drive a **deployed** probe instead of `wrangler dev --local`, set `BS_INTERLEAVE_ORIGIN` to
+that origin (for example `https://bootsharp-do-interleave-probe.<subdomain>.workers.dev`). The
+driver then skips spawning wrangler and runs only the requested scenarios against it. Optional:
+`BS_INTERLEAVE_HIBERNATE_MS` (idle before the wake frame; default 14000),
+`BS_INTERLEAVE_SCOPE` (Durable Object name; remote defaults to a unique `hibernate-<timestamp>`
+so repeats do not share isolate state).
+
+`run.mjs` takes an exclusive lock on `.interleave.lock` in this directory so a second invocation
+fails immediately — even on another `BS_INTERLEAVE_PORT`, which the busy-port check cannot see.
+The error names the holding pid. A leftover lock whose pid is dead is taken over. Miniflare state
+is written to a unique `os.tmpdir()` directory via `wrangler dev --persist-to` (not
+`.wrangler/state`) and deleted when the driver exits. The busy-port check is unchanged.
+
 ## How it measures
 
 C# `Hub` handlers run a *program*, `label|op,op,…`, and write every interleaving point into one
@@ -87,11 +100,28 @@ Stable across repeat runs unless noted.
    Object (new incarnation, second `IHub.Construct`) but the **isolate survives**: C# statics, and
    therefore the per-connection conversation counter, continue across the wake. `getWebSockets()`
    returns the socket and `deserializeAttachment()` is intact. 3/3 identical in isolation.
-   **But the wake is not always transparent:** in 1 of 4 runs the socket was *re-accepted*
-   (`js:accept` twice, `sockets` 2) and the frame that preceded the idle was *delivered a second
-   time* — the harness reports this explicitly as `accepts` and `deliveries`. Whether that is a
-   `wrangler dev --local` proxy artifact or real at-least-once wake semantics is not decidable
-   here; it is the same measurement research/10 open question 2 defers to production Cloudflare.
+   **But the wake is not always transparent locally:** in 1 of 4 `wrangler dev --local` runs the
+   socket was *re-accepted* (`js:accept` twice, `sockets` 2) and the frame that preceded the idle
+   was *delivered a second time* — the harness reports this explicitly as `accepts` and
+   `deliveries`. That 1-in-4 is a local artifact; production does not do it (below). Hub dispatch
+   does **not** need duplicate-frame tolerance on the strength of the local run.
+
+   **Production** (2026-08-14, worker `bootsharp-do-interleave-probe` at
+   `https://bootsharp-do-interleave-probe.stevefan1999.workers.dev`, existing `dist/` wasm, four
+   isolated scopes `hibernate-prod-1`…`4`, 14 s idle — incarnation already increased, so 70 s /
+   120 s were not run). Identical in 4 of 4:
+
+   | run | accepts | deliveries | incarnation | isolateSurvived | sockets | constructions |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | 1 | 1 | `h1\|kv1`, `h2\|kv1` | 1 → 2 | true | 1 | 2 |
+   | 2 | 1 | `h1\|kv1`, `h2\|kv1` | 1 → 2 | true | 1 | 2 |
+   | 3 | 1 | `h1\|kv1`, `h2\|kv1` | 1 → 2 | true | 1 | 2 |
+   | 4 | 1 | `h1\|kv1`, `h2\|kv1` | 1 → 2 | true | 1 | 2 |
+
+   Conversation counter 1 → 2; attachment `{conn:"h"}` intact. One `js:accept`, no second delivery
+   of `h1`. The actor is rebuilt, the isolate is not, the pre-idle frame is not replayed. n=4
+   cannot exclude a rare production replay, but it does decide research/10 open question 2 for
+   the cost model: a production hibernation wake does **not** pay a .NET boot.
 7. **`setWebSocketAutoResponse` absorbs the SignalR ping.** Two `{"type":6}\x1e` frames are echoed
    by workerd and produce **zero** deliveries to the actor — research/10 §9's cost model holds on a
    real DO with a wasm guest behind it.
@@ -171,10 +201,11 @@ still cost 20,000 JS `import` calls and 20,000 refcount increments. This landed 
 — a `DurableObjectHubLifetimeManager` reaches through `Ctx.Storage` and `ctx.getWebSockets()` on
 every send.
 
-Two host-level artifacts for whoever re-runs this, neither of them a guest failure. The lane keeps
-its miniflare state in the harness directory, so two `wrangler dev` instances started from it
-interfere — that is one cause of an occasional `"/burst/report answered 500: Network connection
-lost"`. The other is miniflare's own local Durable Object storage, which raises
-`NOSENTRY database is locked: SQLITE_BUSY` under repeated 20,000-read bursts. Both are
-distinguishable from the defect the same way: both handlers still ack, and no `cs:throw` is
-recorded.
+Two host-level artifacts for whoever re-runs this, neither of them a guest failure. Concurrent
+`run.mjs` invocations from this directory are refused by `.interleave.lock`, and each run gives
+wrangler a unique `--persist-to` directory under `os.tmpdir()`, so two `wrangler dev` instances
+no longer share the lane's miniflare sqlite — that was one cause of an occasional
+`"/burst/report answered 500: Network connection lost"`. The other is miniflare's own local
+Durable Object storage, which raises `NOSENTRY database is locked: SQLITE_BUSY` under repeated
+20,000-read bursts. Both are distinguishable from the defect the same way: both handlers still
+ack, and no `cs:throw` is recorded.
