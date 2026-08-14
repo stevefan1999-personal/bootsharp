@@ -234,6 +234,36 @@ public class RequestScopeTests
         Assert.NotNull(escaped);
         Assert.Throws<ObjectDisposedException>(() => { _ = escaped.Request; });
     }
+
+    /// <summary>
+    /// A singleton that captures a scoped service is the isolate-model failure the D1 sample hit:
+    /// it resolves from the root, then the next request uses a released handle. Validation has to
+    /// refuse that graph at <c>Build</c>, not on request 2.
+    /// </summary>
+    [Fact]
+    public void BuildRefusesASingletonThatCapturesAScopedService ()
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Services.AddScoped<Connection>();
+        builder.Services.AddSingleton<Holder>();
+        var exception = Assert.ThrowsAny<Exception>(() =>
+            builder.Build(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }));
+        Assert.Contains("Holder", exception.ToString());
+        Assert.Contains("Connection", exception.ToString());
+    }
+
+    [Fact]
+    public void NullServiceProviderOptionsAreRejected ()
+    {
+        Assert.Throws<ArgumentNullException>(() => WebApplication.CreateSlimBuilder().Build(null!));
+    }
+
+    private sealed class Connection;
+
+    private sealed class Holder (Connection connection)
+    {
+        public Connection Connection { get; } = connection;
+    }
 }
 
 /// <summary>The body is buffered by the invocation, and only when the method could carry one.</summary>

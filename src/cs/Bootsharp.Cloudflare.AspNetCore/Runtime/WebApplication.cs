@@ -19,7 +19,7 @@ namespace Microsoft.AspNetCore.Builder;
 /// Kestrel, IIS, HostFiltering, Diagnostics, Cors, Authentication, generic Hosting and five
 /// configuration providers — none of which can exist in workerd. What survives is
 /// what users actually type: <see cref="Services"/>, <see cref="Logging"/>,
-/// <see cref="Build"/>. <c>Configuration</c> and <c>Environment</c> are absent rather than faked:
+/// <see cref="Build()"/>. <c>Configuration</c> and <c>Environment</c> are absent rather than faked:
 /// a worker's configuration is its <c>env</c> bindings, reachable through
 /// <see cref="WorkerContext{TEnv}"/>, and modelling that as an <c>IConfiguration</c> chain would
 /// be a different shape wearing the name.
@@ -46,8 +46,31 @@ public sealed class WebApplicationBuilder
     /// </remarks>
     public ILoggingBuilder Logging => new WorkerLoggingBuilder(Services);
 
-    /// <summary>Builds the application.</summary>
-    public WebApplication Build () => new(Services.BuildServiceProvider());
+    /// <summary>Builds the application with the configuration-default service provider options.</summary>
+    /// <remarks>
+    /// DEBUG builds validate scopes and the graph: a singleton capturing a scoped connection is the
+    /// isolate-model failure mode — it resolves silently from the root and serves a released handle
+    /// on the next request. Release builds skip that walk, because <c>ValidateOnBuild</c> constructs
+    /// singletons reflectively and is not NativeAOT-clean. Pass
+    /// <see cref="Build(ServiceProviderOptions)"/> to opt in or out on either configuration.
+    /// </remarks>
+    public WebApplication Build () => Build(DefaultServiceProviderOptions);
+
+    /// <summary>Builds the application with explicit service-provider options.</summary>
+    public WebApplication Build (ServiceProviderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return new(Services.BuildServiceProvider(options));
+    }
+
+#if DEBUG
+    private static ServiceProviderOptions DefaultServiceProviderOptions { get; } = new() {
+        ValidateScopes = true,
+        ValidateOnBuild = true
+    };
+#else
+    private static ServiceProviderOptions DefaultServiceProviderOptions { get; } = new();
+#endif
 
     private sealed class WorkerLoggingBuilder (IServiceCollection services) : ILoggingBuilder
     {
