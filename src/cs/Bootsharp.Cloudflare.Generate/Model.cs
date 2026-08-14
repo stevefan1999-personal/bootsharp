@@ -44,6 +44,17 @@ internal sealed record Env(
 }
 
 /// <summary>
+/// One app-side declaration of the partial the generated dispatch lands in: where it was declared,
+/// and the env it closed the packaged runtime base over. Both have to match the env the dispatch is
+/// emitted against — a half in another namespace, or over another env, is a different type, and the
+/// generated half then calls a registry and codecs that are not in scope.
+/// </summary>
+internal sealed record ActorRuntimeHalf(
+    string Namespace,
+    string EnvFullName,
+    LocationInfo? Location);
+
+/// <summary>
 /// One property of the env interface, with what the adapter check needs on top of the shared
 /// <see cref="EnvProperty"/>: whether the binding is a handle at all, and where to report it.
 /// </summary>

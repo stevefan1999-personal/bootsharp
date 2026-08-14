@@ -103,6 +103,78 @@ public class ActorDispatchTests
     }
 
     /// <summary>
+    /// The first-run cliff: the dispatch is one half of a partial whose other half the app declares,
+    /// and an app that hosts an actor without declaring it used to get the generated half anyway.
+    /// Measured before the diagnostic existed: <b>12</b> errors, every one of them a CS0103/CS0246
+    /// naming a runtime helper (<c>Track</c>, <c>GetActor</c>, <c>EnvScope</c>, <c>ReadArgs</c>,
+    /// <c>ArgInt</c>, <c>JsonInt</c>) inside <c>ActorRuntime.g.cs</c> — a file the app never wrote,
+    /// cannot edit, and whose errors name everything except the declaration that fixes all of them.
+    /// Suppressing the emission is what makes the count 0, so both halves of that claim are asserted
+    /// here: one diagnostic, and nothing else. A Durable Object and a workflow both oblige the same
+    /// declaration, so both are cases of the same test rather than one standing in for the other.
+    /// </summary>
+    [Theory]
+    [InlineData(TestSources.CounterActor, "Counter")]
+    [InlineData(TestSources.DemoWorkflow, "Pipeline")]
+    public void ActorWithoutTheAppsHalfOfTheDispatchIsDiagnosedRatherThanEmitted (string actor, string name)
+    {
+        var run = GeneratorHarness.Run(actor);
+        Assert.Equal(["CFW050"], run.DefectIds);
+        Assert.Empty(run.GeneratedCs);
+        Assert.Equal("no errors", run.ErrorReport);
+        var defect = run.Defects.Single();
+        // The message is the whole point of the diagnostic: it spells the declaration to add.
+        Assert.Contains(name, defect.GetMessage());
+        Assert.Contains(
+            "public sealed partial class ActorRuntime : " +
+            "Bootsharp.Cloudflare.ActorRuntimeBase<Cloudflare.Backend.ICloudflareEnv>",
+            defect.GetMessage());
+        Assert.Contains("namespace 'Cloudflare.Backend'", defect.GetMessage());
+        Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, defect.Location);
+    }
+
+    /// <summary>
+    /// A half over another env is a different type from the one the switches land in, so it leaves
+    /// the same hole — and it is the likelier mistake once an app has two env-shaped interfaces,
+    /// which is why the diagnostic points at that declaration rather than at the actor.
+    /// </summary>
+    [Fact]
+    public void HalfDeclaredOverAnotherEnvDoesNotSatisfyTheDispatchItCannotInherit ()
+    {
+        var run = GeneratorHarness.RunApp(
+            TestSources.App(actorRuntime: TestSources.ForeignActorRuntime),
+            TestSources.CounterActor);
+        Assert.Equal(["CFW050"], run.DefectIds);
+        Assert.Empty(run.GeneratedCs);
+        Assert.Equal("no errors", run.ErrorReport);
+        Assert.Contains("ActorRuntimeBase<Cloudflare.Backend.ICloudflareEnv>", run.Defects.Single().GetMessage());
+    }
+
+    /// <summary>Declaring the half is the whole fix: the diagnostic goes, the dispatch arrives.</summary>
+    [Fact]
+    public void DeclaringTheHalfSilencesTheDiagnosticAndEmitsTheDispatch ()
+    {
+        var run = GeneratorHarness.RunActors(TestSources.CounterActor);
+        Assert.DoesNotContain("CFW050", run.DefectIds);
+        Assert.Contains("public sealed partial class ActorRuntime", run.GeneratedCs);
+        Assert.Equal("no errors", run.ErrorReport);
+    }
+
+    /// <summary>
+    /// A fetch-only worker declares no half because it has no actor to dispatch to, and telling it
+    /// to would be telling every lean app to carry an actor registry it never calls.
+    /// </summary>
+    [Fact]
+    public void WorkerHostingNoActorIsNotAskedForAHalfItHasNoUseFor ()
+    {
+        var run = GeneratorHarness.Run(TestSources.FetchOnlyWorker);
+        Assert.Empty(run.DefectIds);
+        Assert.Empty(run.GeneratedCs);
+        Assert.Equal("no errors", run.ErrorReport);
+        Assert.Contains("export default class Site extends WorkerEntrypoint", run.GeneratedJs);
+    }
+
+    /// <summary>
     /// workerd resolves these prototype members itself, so an RPC method that would
     /// claim one is never dispatchable — the caller would silently reach the handler instead.
     /// </summary>

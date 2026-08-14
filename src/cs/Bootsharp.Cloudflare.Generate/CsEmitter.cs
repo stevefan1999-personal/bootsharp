@@ -30,7 +30,7 @@ internal static class CsEmitter
         b.AppendLine("#nullable enable");
         if (env.Namespace.Length > 0) b.AppendLine($"namespace {env.Namespace};");
         b.AppendLine();
-        b.AppendLine("public sealed partial class ActorRuntime");
+        b.AppendLine($"public sealed partial class {Rules.ActorRuntimeType}");
         b.AppendLine("{");
         b.AppendLine($"    public int ConstructDurableObject(string className, {library}.IDurableObjectState ctx, {env.FullName} env)");
         b.AppendLine("    {");

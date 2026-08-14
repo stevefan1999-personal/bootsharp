@@ -26,12 +26,17 @@ namespace Bootsharp.Cloudflare.Generate.Tests;
 /// </remarks>
 public class DiagnosticIdTests
 {
-    /// <summary>Directory of a front end, and the id range it owns. Ranges may not overlap.</summary>
+    /// <summary>
+    /// Directory of a front end, and one id range it owns. Ranges may not overlap; a front end that
+    /// fills a range takes the next free ten and appears here twice, because renumbering a shipped
+    /// id is the one repair that is never available — a user's <c>NoWarn</c> names it.
+    /// </summary>
     private static readonly (string Dir, int First, int Last)[] blocks = [
         ("", 10, 19),               // worker entrypoints, env bindings, RPC projection
         ("MinimalApi", 20, 29),     // route patterns, parameter binding, results
         ("Html", 30, 39),           // compiled HTML templates
-        ("SignalR", 40, 49)         // hub dispatch
+        ("SignalR", 40, 49),        // hub dispatch
+        ("", 50, 59)                // the same front end, continued: CFW019 filled its first ten
     ];
 
     /// <summary>Every <c>new(...)("CFWnnn", "Title", ...)</c> the generator sources contain.</summary>
@@ -66,25 +71,33 @@ public class DiagnosticIdTests
         {
             var relative = Path.GetRelativePath(GeneratorRoot(), file);
             var dir = Path.GetDirectoryName(relative) is { Length: > 0 } d ? d.Split(Path.DirectorySeparatorChar)[0] : "";
-            var block = Array.Find(blocks, b => b.Dir == dir);
-            Assert.True(block.Dir is not null || dir == "",
+            var owned = Array.FindAll(blocks, b => b.Dir == dir);
+            Assert.True(owned.Length > 0,
                 $"{relative} reports {id} but claims no id block. Add its directory to the table in {nameof(DiagnosticIdTests)}.");
             var number = int.Parse(id[3..]);
-            Assert.True(number >= block.First && number <= block.Last,
-                $"{id} ('{title}') is reported from {relative}, whose block is " +
-                $"CFW{block.First:000}-CFW{block.Last:000}. Blocks keep front ends from colliding.");
+            Assert.True(Array.Exists(owned, b => number >= b.First && number <= b.Last),
+                $"{id} ('{title}') is reported from {relative}, whose blocks are " +
+                $"{string.Join(", ", owned.Select(Range))}. Blocks keep front ends from colliding.");
         }
     }
 
+    /// <summary>
+    /// Compared pairwise by position rather than by owner, so that the two ranges one front end
+    /// holds are checked against each other as well: the hazard is an id meaning two things, and a
+    /// range accidentally restated under the same directory produces exactly that.
+    /// </summary>
     [Fact]
     public void BlocksDoNotOverlap ()
     {
-        foreach (var left in blocks)
-        foreach (var right in blocks)
-            if (left.Dir != right.Dir)
-                Assert.True(left.Last < right.First || right.Last < left.First,
-                    $"blocks '{left.Dir}' and '{right.Dir}' overlap");
+        for (var left = 0; left < blocks.Length; left++)
+        for (var right = left + 1; right < blocks.Length; right++)
+            Assert.True(blocks[left].Last < blocks[right].First || blocks[right].Last < blocks[left].First,
+                $"blocks '{blocks[left].Dir}' {Range(blocks[left])} and " +
+                $"'{blocks[right].Dir}' {Range(blocks[right])} overlap");
     }
+
+    private static string Range ((string Dir, int First, int Last) block) =>
+        $"CFW{block.First:000}-CFW{block.Last:000}";
 
     /// <summary>The generator project beside this one, located from this file rather than from the
     /// working directory so the scan is independent of how the suite is launched.</summary>

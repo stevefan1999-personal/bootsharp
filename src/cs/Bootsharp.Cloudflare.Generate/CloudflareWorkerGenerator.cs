@@ -25,6 +25,18 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
             .Select(static (e, _) => e!)
             .Collect();
 
+        // The app's half of the dispatch partial. Resolved from syntax rather than looked up in the
+        // compilation so the check stays incremental: the compilation is a new value on every
+        // keystroke, whereas this list only changes when a declaration of that half does.
+        var halves = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax
+                    { BaseList: not null, Identifier.ValueText: Rules.ActorRuntimeType },
+                static (ctx, _) => ResolveActorRuntime(ctx))
+            .Where(static h => h is not null)
+            .Select(static (h, _) => h!)
+            .Collect();
+
         var envs = context.SyntaxProvider
             .ForAttributeWithMetadataName(Rules.EnvAttribute,
                 static (node, _) => node is InterfaceDeclarationSyntax,
@@ -45,8 +57,11 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
             .Collect();
         var imported = context.CompilationProvider.Select(static (c, _) => ImportsLogSink(c));
 
-        context.RegisterSourceOutput(entrypoints.Combine(envs).Combine(uses.Combine(imported)),
-            static (spc, data) => Execute(spc, data.Left.Left, data.Left.Right, data.Right.Left, data.Right.Right));
+        context.RegisterSourceOutput(entrypoints.Combine(halves).Combine(envs).Combine(uses.Combine(imported)),
+            static (spc, data) => {
+                var (((resolved, declared), marked), (logUses, importsSink)) = data;
+                Execute(spc, resolved, declared, marked, logUses, importsSink);
+            });
     }
 
     private static Resolution? Resolve (GeneratorSyntaxContext ctx)
@@ -197,6 +212,24 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
             LocationInfo.From(symbol));
     }
 
+    /// <summary>
+    /// Reads one app-side declaration of the dispatch partial, or null for a namesake that derives
+    /// from something else. Matched by base type rather than by name alone: <c>ActorRuntime</c> is an
+    /// ordinary identifier an app is free to use for a type of its own.
+    /// </summary>
+    private static ActorRuntimeHalf? ResolveActorRuntime (GeneratorSyntaxContext ctx)
+    {
+        if (ctx.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)ctx.Node) is not INamedTypeSymbol symbol)
+            return null;
+        for (var type = symbol.BaseType; type is not null; type = type.BaseType)
+            if (Rules.IsActorRuntimeBase(Space(type), type.Name) && type.Arity == 1)
+                return new ActorRuntimeHalf(
+                    symbol.ContainingNamespace.IsGlobalNamespace ? "" : symbol.ContainingNamespace.ToDisplayString(),
+                    type.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    LocationInfo.From(symbol));
+        return null;
+    }
+
     /// <summary>Where the app names the Cloudflare logging surface, or null for a namesake of it.</summary>
     private static LocationInfo? ResolveLogUse (GeneratorSyntaxContext ctx)
     {
@@ -219,7 +252,8 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
         .Any(static v => v.Value is INamedTypeSymbol type && FullName(type) == Rules.LogSink);
 
     private static void Execute (SourceProductionContext spc, ImmutableArray<Resolution> resolved,
-        ImmutableArray<Env> envs, ImmutableArray<LocationInfo> logUses, bool importsLogSink)
+        ImmutableArray<ActorRuntimeHalf> halves, ImmutableArray<Env> envs,
+        ImmutableArray<LocationInfo> logUses, bool importsLogSink)
     {
         var list = resolved
             .OrderBy(static r => r.Entrypoint.Kind, StringComparer.Ordinal)
@@ -230,20 +264,60 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
             .Concat(LogSinkDefect(logUses, importsLogSink))
             .ToList();
         var env = ChooseEnv(envs, list, defects);
+        // The dispatch exists to construct and call actors, and it is one half of a partial class
+        // whose other half — deriving from the packaged ActorRuntimeBase — the app declares. Three
+        // conditions have to hold before it can compile: an app with no Durable Object and no
+        // workflow needs no dispatch at all, without an env there is no handle to construct an actor
+        // against, and without the app's half the emitted switches inherit nothing they call. The
+        // last two are diagnosed and neither emits — a file the app never wrote cannot be fixed by
+        // reading its compiler errors. They are checked in that order so an app missing the env is
+        // told to mark it before being told to declare a half over it, which has to name the env
+        // type. The ESM module is emitted by the publish task either way, because a worker that
+        // hosts no actor is a legitimate (fetch-only) worker — lean core.
+        var emit = Hosts(list) && env.FullName.Length > 0 && DeclaresRuntimeHalf(halves, env, list, defects);
         foreach (var defect in defects)
             spc.ReportDiagnostic(Diagnostic.Create(
                 new DiagnosticDescriptor(defect.Id, defect.Title, "{0}", Rules.Library, defect.Severity, true),
                 defect.Location?.ToLocation() ?? Location.None,
                 defect.Message));
-        // The dispatch exists to construct and call actors, and it is one half of a partial class
-        // whose other half — deriving from the packaged ActorRuntimeBase — the app declares. Both
-        // conditions have to hold before it can compile: an app with no Durable Object and no
-        // workflow declares no such half, and without an env there is no handle to construct an
-        // actor against. Either way the ESM module is still emitted by the publish task, because a
-        // worker that hosts no actor is a legitimate (fetch-only) worker — lean core.
-        if (Hosts(list) && env.FullName.Length > 0)
-            spc.AddSource("ActorRuntime.g.cs", CsEmitter.Emit(list, env));
+        if (emit) spc.AddSource("ActorRuntime.g.cs", CsEmitter.Emit(list, env));
     }
+
+    /// <summary>
+    /// Whether the app declared its half of the dispatch partial against the env the dispatch is
+    /// emitted against, reporting the declaration it has to add when it did not.
+    /// </summary>
+    /// <remarks>
+    /// Without this the generated half was emitted regardless, and a first actor app got a dozen raw
+    /// CS0103/CS0246 errors — <c>Track</c>, <c>GetActor</c>, <c>EnvScope</c>, <c>ReadArgs</c>,
+    /// <c>ArgInt</c>, <c>JsonInt</c> — out of <c>ActorRuntime.g.cs</c>, a file it never wrote and
+    /// cannot edit. None of them named the one missing declaration; every one of them disappears
+    /// with it.
+    /// </remarks>
+    private static bool DeclaresRuntimeHalf (ImmutableArray<ActorRuntimeHalf> halves, Env env,
+        IReadOnlyList<Resolution> list, List<Defect> defects)
+    {
+        var ordered = halves.OrderBy(static h => h.Namespace, StringComparer.Ordinal).ToArray();
+        if (Array.Exists(ordered, h => h.Namespace == env.Namespace && h.EnvFullName == env.FullName))
+            return true;
+        var actor = list.First(static r => r.Entrypoint.Kind is "DurableObject" or "Workflow");
+        var where = env.Namespace.Length > 0 ? $"namespace '{env.Namespace}'" : "the global namespace";
+        defects.Add(new Defect("CFW050", "Actor runtime half is missing",
+            $"'{actor.Entrypoint.Name}' is an actor, and its dispatch is emitted into the app's own " +
+            $"'{Rules.ActorRuntimeType}' partial: a partial class cannot span the package boundary, so the " +
+            "half that inherits the instance registry and the JSON codecs is the app's to declare. Declare " +
+            $"'{Rules.ActorRuntimeDeclaration(Unqualified(env.FullName))}' in {where}, along with the " +
+            "runtime interface this app exports to the generated module.",
+            // An incompatible half — one closed over another env, or declared beside another
+            // namespace's bindings — is the likelier mistake of the two and has a line to point at.
+            Array.Find(ordered, h => h.Namespace == env.Namespace)?.Location
+            ?? ordered.FirstOrDefault()?.Location ?? actor.Location));
+        return false;
+    }
+
+    /// <summary>A globally qualified name as source would spell it, for a diagnostic message.</summary>
+    private static string Unqualified (string fullName) =>
+        fullName.StartsWith("global::", StringComparison.Ordinal) ? fullName.Substring("global::".Length) : fullName;
 
     private static bool Hosts (IReadOnlyList<Resolution> list) =>
         list.Any(static r => r.Entrypoint.Kind is "DurableObject" or "Workflow");

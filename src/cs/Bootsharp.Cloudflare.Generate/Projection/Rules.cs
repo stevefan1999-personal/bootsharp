@@ -53,6 +53,28 @@ internal static class Rules
     /// <summary>Name of the adapter wrapping a binding of the given interface type.</summary>
     public static string Adapter (string typeName) => "wrap" + typeName;
 
+    /// <summary>
+    /// Name of the class the actor dispatch is emitted into. The app declares the other half of it,
+    /// deriving from <see cref="ActorRuntimeBaseType"/>: a partial class cannot span the package
+    /// boundary the instance registry and the JSON codecs sit behind, so the seam between the two
+    /// halves is inheritance rather than the partial itself.
+    /// </summary>
+    public const string ActorRuntimeType = "ActorRuntime";
+
+    /// <summary>Packaged base of <see cref="ActorRuntimeType"/>, generic over the app's env.</summary>
+    public const string ActorRuntimeBaseType = "ActorRuntimeBase";
+
+    /// <summary>
+    /// Whether a base type is <see cref="ActorRuntimeBaseType"/>, matched on the unbound name — the
+    /// base is generic over the app's env, and a symbol's name carries no arity.
+    /// </summary>
+    public static bool IsActorRuntimeBase (string space, string name) =>
+        space == Library && name == ActorRuntimeBaseType;
+
+    /// <summary>The declaration an actor obliges the app to write, spelled as it would write it.</summary>
+    public static string ActorRuntimeDeclaration (string envName) =>
+        $"public sealed partial class {ActorRuntimeType} : {Library}.{ActorRuntimeBaseType}<{envName}>";
+
     /// <summary>Interface type an app declares for the namespace binding of a Durable Object.</summary>
     public static string NamespaceType (string durableName) => $"I{durableName}Namespace";
 

@@ -249,6 +249,17 @@ internal static class TestSources
         """;
 
     /// <summary>
+    /// A half closed over an env other than the marked one. It compiles on its own, which is what
+    /// makes it worth a case of its own: the generated switches close the same partial over the env
+    /// the app marked, so the two halves are one type only when both name the same one.
+    /// </summary>
+    public const string ForeignActorRuntime = """
+        public interface IOtherEnv { IKvNamespace KV { get; } }
+
+        public sealed partial class ActorRuntime : ActorRuntimeBase<IOtherEnv>;
+        """;
+
+    /// <summary>
     /// The app half plus the namespace binding for <see cref="CounterActor"/>. Kept out of the
     /// default app so that a case which hosts no Durable Object declares no binding for one — which
     /// is what makes CFW018 (a binding whose actor is not there) a real signal.
