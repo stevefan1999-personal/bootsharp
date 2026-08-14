@@ -1,0 +1,27 @@
+<Project>
+
+    <PropertyGroup>
+        <!-- Set to false to hand-pick the pages instead: the generator compiles whatever arrives as
+             AdditionalFiles, so an explicit <AdditionalFiles Include="Views/**/*.cshtml"/> is the
+             supported way to keep .cshtml outside the default glob (design-time copies, fixtures). -->
+        <BsCfRazorIncludePages Condition="'$(BsCfRazorIncludePages)' == ''">true</BsCfRazorIncludePages>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The page's namespace is RootNamespace plus its folders, so the generator needs both, and
+             neither is compiler-visible by default in every SDK it may meet. -->
+        <CompilerVisibleProperty Include="RootNamespace"/>
+        <CompilerVisibleProperty Include="ProjectDir"/>
+    </ItemGroup>
+
+    <!-- A .targets rather than a .props: DefaultItemExcludes (bin/, obj/) is an SDK property that a
+         package's build/*.props is imported too early to see, and a glob that swept obj/ would
+         compile every page a previous build had already copied there. Excluding the items already
+         present keeps an explicit AdditionalFiles entry from being listed twice — two AdditionalTexts
+         for one path would ask the generator to emit one file under one hint name twice. -->
+    <ItemGroup Condition="'$(BsCfRazorIncludePages)' == 'true'">
+        <AdditionalFiles Include="**/*.cshtml"
+                         Exclude="@(AdditionalFiles);$(DefaultItemExcludes);$(DefaultExcludesInProjectFolder)"/>
+    </ItemGroup>
+
+</Project>

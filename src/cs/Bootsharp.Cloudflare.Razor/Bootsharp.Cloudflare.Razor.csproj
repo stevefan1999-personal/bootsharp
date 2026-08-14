@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <AssemblyTitle>Bootsharp.Cloudflare.Razor</AssemblyTitle>
+        <PackageId>Bootsharp.Cloudflare.Razor</PackageId>
+        <Description>Compile .cshtml pages for Bootsharp apps on Cloudflare Workers: the Razor compiler retargeted onto Bootsharp.Cloudflare.AspNetCore's HtmlWriter, with no MVC runtime, no Razor SDK and nothing of Razor left in the published worker.</Description>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- NU5128: an analyzer-only package has no lib/ to match its (suppressed) dependency group. -->
+        <NoWarn>CS1591;NU5128</NoWarn>
+        <!-- Nothing of this package reaches a consumer's output, so it must not flow as a reference:
+             both assemblies below ship under analyzers/ and are build inputs only. -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <DevelopmentDependency>true</DevelopmentDependency>
+        <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Must track Bootsharp.Cloudflare.Generate's Roslyn version: the two analyzers load into
+             the same compiler, and a generator built against a newer Microsoft.CodeAnalysis than the
+             host provides fails to load rather than degrading. -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all"/>
+        <!-- The Razor compiler, pinned and frozen on purpose (ADR-0011 §3; research/16 §1.2, §5.2.1).
+             6.0.36 is the last published build of the pre-consolidation compiler assembly: restorable,
+             netstandard2.0, MIT, and — uniquely among the candidates — declaring zero dependencies, so
+             it can be redistributed inside analyzers/ as a single file. Its successor
+             (Microsoft.CodeAnalysis.Razor.Compiler) is structurally unrestorable, its declared
+             dependency having never been published; the SDK's own copy cannot be referenced from a
+             netstandard2.0 analyzer at all. The extension surface this generator sits on carries no
+             PublicAPI.Shipped.txt and four of its signatures changed shape across versions, so the
+             version is pinned rather than floated: a package that will never move again is the
+             stability strategy, not a compromise with it. -->
+        <PackageReference Include="Microsoft.AspNetCore.Razor.Language" Version="6.0.36"
+                          PrivateAssets="all" GeneratePathProperty="true"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Release tracking, which is how an analyzer records that an id is spoken for. It is the
+             per-package half of ADR-0004's allocation rule: the block is reserved family-wide in
+             DiagnosticIdTests, and each id inside it is accounted for here. -->
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md"/>
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The generator and the compiler it drives, side by side under analyzers/dotnet/cs. NuGet
+             hands every assembly in that folder to Roslyn as an <Analyzer/>, which is both how the
+             dependency resolves (the analyzer load context probes its own directory) and how the
+             Razor SDK itself ships its compiler. Razor.Language declares no analyzers or generators
+             of its own, so being listed there costs a load and nothing else. -->
+        <None Include="$(PkgMicrosoft_AspNetCore_Razor_Language)/lib/netstandard2.0/Microsoft.AspNetCore.Razor.Language.dll"
+              Pack="true" Visible="false" PackagePath="analyzers/dotnet/cs"/>
+        <None Include="$(OutputPath)$(AssemblyName).dll"
+              Pack="true" Visible="false" PackagePath="analyzers/dotnet/cs"/>
+        <!-- Globs .cshtml into AdditionalFiles and makes RootNamespace/ProjectDir visible to the
+             generator, so that referencing the package is the whole of the setup. -->
+        <None Include="Build/Bootsharp.Cloudflare.Razor.targets" Pack="true" PackagePath="build/;buildTransitive/"/>
+    </ItemGroup>
+
+    <!-- Packing reads $(OutputPath), so the assembly has to exist before pack runs. Building the
+         project is what produces it; this only makes the ordering explicit for `dotnet pack` on a
+         clean tree, matching how Bootsharp.Cloudflare packs its own analyzer. -->
+    <Target Name="EnsureAnalyzerBuilt" BeforeTargets="GenerateNuspec" DependsOnTargets="Build"/>
+
+</Project>

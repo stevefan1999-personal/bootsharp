@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>Bootsharp.Cloudflare.Razor.Tests</RootNamespace>
+        <!-- The suite never links the wasm backend; the sample's Emscripten props stay inert here. -->
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Plain library reference, not OutputItemType="Analyzer": the driver instantiates the
+             generator itself, so the tests need its types on the compile-time reference path. -->
+        <ProjectReference Include="../Bootsharp.Cloudflare.Razor/Bootsharp.Cloudflare.Razor.csproj"/>
+        <!-- The pages are compiled and run against the real HtmlWriter, never a stub. The claim the
+             whole tier rests on is that retargeted Razor codegen lands on that package's five write
+             methods with that package's encoder; a stub could agree with the generator while the
+             shipped runtime disagreed with both. -->
+        <ProjectReference Include="../Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Must track the generator's Roslyn version: it marks the package PrivateAssets="all". -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0"/>
+        <!-- Likewise the Razor compiler: the generator ships it under analyzers/, so it does not flow
+             to a consumer as a reference and this project has to ask for it by name. Pinned to the
+             same version the generator pins, since the two are the same assembly at build time. -->
+        <PackageReference Include="Microsoft.AspNetCore.Razor.Language" Version="6.0.36"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5"/>
+    </ItemGroup>
+
+</Project>

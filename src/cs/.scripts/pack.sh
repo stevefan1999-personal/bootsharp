@@ -24,6 +24,10 @@ dotnet pack Bootsharp.Cloudflare.Publish -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare.AspNetCore -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare.SignalR -o .nuget -c Release
+# Analyzer-only, and the one package that redistributes a third-party assembly: the pinned Razor
+# compiler ships beside the generator under analyzers/dotnet/cs, which is how the dependency resolves
+# at build time and why nothing of Razor reaches a published worker. See ADR-0011 §3.
+dotnet pack Bootsharp.Cloudflare.Razor -o .nuget -c Release
 # Packed so the layer is buildable and testable, NOT because it is shippable yet: under
 # NativeAOT-LLVM every reference-typed field of Microsoft's RenderTreeFrame reads back null, so
 # StaticHtmlRenderer cannot write HTML inside workerd. See ADR-0011 §2 and the milestone-6 report.

@@ -36,7 +36,13 @@ public class DiagnosticIdTests
         ("MinimalApi", 20, 29),     // route patterns, parameter binding, results
         ("Html", 30, 39),           // compiled HTML templates
         ("SignalR", 40, 49),        // hub dispatch
-        ("", 50, 59)                // the same front end, continued: CFW019 filled its first ten
+        ("", 50, 59),               // the same front end, continued: CFW019 filled its first ten
+        // Reserved rather than scanned: the .cshtml generator ships in its own analyzer assembly
+        // (Bootsharp.Cloudflare.Razor), because it redistributes a 1 MB pinned Razor compiler that
+        // no other front end should make a consumer download. The scan below cannot reach it, so the
+        // row exists to keep the block spoken for — the id table is the allocation record, and an
+        // allocation that is only written down in the other project is one nobody here would see.
+        ("../Bootsharp.Cloudflare.Razor", 60, 69)
     ];
 
     /// <summary>Every <c>new(...)("CFWnnn", "Title", ...)</c> the generator sources contain.</summary>
