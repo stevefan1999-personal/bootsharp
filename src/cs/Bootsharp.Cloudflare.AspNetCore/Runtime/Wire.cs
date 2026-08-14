@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Primitives;
@@ -43,8 +42,8 @@ public sealed record HttpResponseData (
 /// <remarks>
 /// The old shim built response headers by string concatenation and did not escape values
 ///so a header value containing a quote produced JSON the JS side could not
-/// parse. Both directions go through <see cref="Utf8JsonWriter"/> / <see cref="JsonDocument"/>
-/// here, which is reflection-free and therefore AOT-clean.
+/// parse. Writes go through <see cref="HeaderJsonContext"/>; reads through
+/// <see cref="JsonDocument"/>, which is a parser rather than a constructor.
 /// </remarks>
 public static class HeaderJson
 {
@@ -81,28 +80,26 @@ public static class HeaderJson
     /// </remarks>
     public static string Render (IHeaderDictionary headers)
     {
-        var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
+        var json = HeaderJsonContext.Default;
+        var map = new Dictionary<string, JsonElement>();
+        foreach (var (name, values) in headers)
         {
-            writer.WriteStartObject();
-            foreach (var (name, values) in headers)
-            {
-                if (values.Count == 0) continue;
-                if (values.Count == 1) writer.WriteString(name, values[0]);
-                else WriteArray(writer, name, values);
-            }
-            writer.WriteEndObject();
+            if (values.Count == 0) continue;
+            if (values.Count == 1)
+                map[name] = JsonSerializer.SerializeToElement(values[0], json.String);
+            else
+                map[name] = JsonSerializer.SerializeToElement(Present(values), json.StringArray);
         }
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        return JsonSerializer.Serialize(map, json.DictionaryStringJsonElement);
     }
 
-    private static void WriteArray (Utf8JsonWriter writer, string name, StringValues values)
+    private static string[] Present (StringValues values)
     {
-        writer.WriteStartArray(name);
+        var present = new List<string>(values.Count);
         foreach (var value in values)
             if (value is not null)
-                writer.WriteStringValue(value);
-        writer.WriteEndArray();
+                present.Add(value);
+        return present.ToArray();
     }
 
     private static string?[] Strings (JsonElement array)

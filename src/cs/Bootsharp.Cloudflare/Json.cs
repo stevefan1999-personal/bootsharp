@@ -1,47 +1,33 @@
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Bootsharp.Cloudflare;
 
 /// <summary>
-/// JSON text helpers. Every payload here is assembled by hand — reflection-based serialization is
-/// off (<c>JsonSerializerIsReflectionEnabledByDefault=false</c>) — so the escaping rules live in
-/// one place instead of being re-derived per call site.
+/// Source-generated JSON for this package. Reflection-based serialization is off
+/// (<c>JsonSerializerIsReflectionEnabledByDefault=false</c>), so every type that crosses a
+/// JSON boundary is listed on <see cref="CloudflareJsonContext"/>.
 /// </summary>
 public static class Json
 {
     /// <summary>
-    /// Escapes a value for embedding in a JSON string literal. Control characters are escaped along
-    /// with the structural ones: a tab or carriage return arriving from a database row or a log
-    /// message would otherwise produce a document the JS side cannot parse.
+    /// A nullable string as a JSON value: a quoted literal, or <c>null</c>. The encoding is
+    /// <see cref="JsonSerializer"/>'s, not a hand-rolled escape table.
     /// </summary>
-    public static string Escape(string value)
-    {
-        if (!NeedsEscaping(value)) return value;
-        var escaped = new StringBuilder(value.Length + 16);
-        foreach (var character in value)
-            switch (character)
-            {
-                case '"': escaped.Append("\\\""); break;
-                case '\\': escaped.Append("\\\\"); break;
-                case '\n': escaped.Append("\\n"); break;
-                case '\r': escaped.Append("\\r"); break;
-                case '\t': escaped.Append("\\t"); break;
-                default:
-                    if (character < ' ') escaped.Append("\\u").Append(((int)character).ToString("x4"));
-                    else escaped.Append(character);
-                    break;
-            }
-        return escaped.ToString();
-    }
-
-    /// <summary>Renders a nullable string as a JSON value: a quoted literal, or <c>null</c>.</summary>
-    public static string Quote(string? value) => value is null ? "null" : "\"" + Escape(value) + "\"";
-
-    private static bool NeedsEscaping(string value)
-    {
-        foreach (var character in value)
-            if (character is '"' or '\\' || character < ' ')
-                return true;
-        return false;
-    }
+    public static string Quote (string? value) =>
+        JsonSerializer.Serialize(value, CloudflareJsonContext.Default.String);
 }
+
+/// <summary>
+/// Closed-world metadata for the package's own JSON. No naming policy: callers that build a
+/// <see cref="Dictionary{TKey,TValue}"/> of <see cref="JsonElement"/> already chose the keys.
+/// </summary>
+[JsonSourceGenerationOptions]
+[JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(Dictionary<string, JsonElement>))]
+internal sealed partial class CloudflareJsonContext : JsonSerializerContext;

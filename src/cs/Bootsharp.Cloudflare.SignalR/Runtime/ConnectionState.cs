@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Text;
 using System.Text.Json;
 
 namespace Bootsharp.Cloudflare.SignalR;
@@ -10,10 +8,9 @@ namespace Bootsharp.Cloudflare.SignalR;
 /// accept tag, which workerd makes immutable and indexes (<c>getWebSockets(tag)</c>).
 /// </summary>
 /// <remarks>
-/// <para>Read and written with a hand-rolled reader/writer rather than a serializer. The shape is
-/// fixed and library-owned, so a <c>JsonSerializerContext</c> would be a generated type and a
-/// package dependency to express six fields; the payload types the app contributes go through the
-/// real <c>JsonHubProtocol</c> instead, which is where a resolver belongs.</para>
+/// <para>Serialized through <see cref="SignalRJsonContext"/> onto a four-field DTO whose short
+/// names are the on-the-wire contract. The payload types the app contributes go through the real
+/// <c>JsonHubProtocol</c> instead, which is where a resolver belongs.</para>
 /// <para>workerd caps the serialized attachment at 16 KiB (<c>web-socket.h:776</c>). Group names
 /// are the only unbounded contributor, which <see cref="GroupLimit"/> bounds.</para>
 /// </remarks>
@@ -61,25 +58,10 @@ internal sealed class ConnectionState
 
     public bool InGroup (string group) => Groups.Contains(group, StringComparer.Ordinal);
 
-    public string Serialize ()
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            writer.WriteBoolean("h", Handshaken);
-            writer.WriteNumber("t", AcceptedAt);
-            if (UserIdentifier is not null) writer.WriteString("u", UserIdentifier);
-            if (Groups.Count > 0)
-            {
-                writer.WriteStartArray("g");
-                foreach (var group in Groups) writer.WriteStringValue(group);
-                writer.WriteEndArray();
-            }
-            writer.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
+    public string Serialize () =>
+        JsonSerializer.Serialize(
+            new ConnectionStateDto(Handshaken, AcceptedAt, UserIdentifier, Groups.Count == 0 ? null : Groups),
+            SignalRJsonContext.Default.ConnectionStateDto);
 
     /// <summary>
     /// Reads an attachment back. A socket accepted by an older build, or one whose attachment was
@@ -90,16 +72,14 @@ internal sealed class ConnectionState
     {
         var state = new ConnectionState();
         if (string.IsNullOrEmpty(attachment)) return state;
-        using var document = JsonDocument.Parse(attachment);
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object) return state;
-        if (root.TryGetProperty("h", out var handshaken)) state.Handshaken = handshaken.GetBoolean();
-        if (root.TryGetProperty("t", out var accepted)) state.AcceptedAt = accepted.GetDouble();
-        if (root.TryGetProperty("u", out var user)) state.UserIdentifier = user.GetString();
-        if (!root.TryGetProperty("g", out var groups) || groups.ValueKind != JsonValueKind.Array) return state;
-        foreach (var group in groups.EnumerateArray())
-            if (group.GetString() is { } name)
-                state.Groups.Add(name);
+        ConnectionStateDto? dto;
+        try { dto = JsonSerializer.Deserialize(attachment, SignalRJsonContext.Default.ConnectionStateDto); }
+        catch (JsonException) { return state; }
+        if (dto is null) return state;
+        state.Handshaken = dto.Handshaken;
+        state.AcceptedAt = dto.AcceptedAt;
+        state.UserIdentifier = dto.UserIdentifier;
+        if (dto.Groups is { Count: > 0 } groups) state.Groups.AddRange(groups);
         return state;
     }
 }

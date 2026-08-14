@@ -320,11 +320,9 @@ public sealed class RedirectHttpResult (string url, bool permanent, bool preserv
 
 /// <summary>An RFC 7807 problem response.</summary>
 /// <remarks>
-/// The body is written by hand rather than through <see cref="JsonSerializer"/>, because
-/// <see cref="ProblemDetails"/> carries an <c>Extensions</c> dictionary of arbitrary values,
-/// which source-generated metadata cannot describe. Writing the four known members plus the
-/// extensions with <see cref="Utf8JsonWriter"/> keeps the type off the reflective path
-/// entirely.
+/// Serialized through <see cref="ProblemJsonContext"/>. <see cref="ProblemDetails.Extensions"/>
+/// is a bag of arbitrary values that source-generated metadata cannot describe, so this host
+/// writes the five known members (and, for validation, the errors map) and nothing else.
 /// </remarks>
 public class ProblemHttpResult (ProblemDetails problemDetails) : IResult, IStatusCodeHttpResult
 {
@@ -338,26 +336,16 @@ public class ProblemHttpResult (ProblemDetails problemDetails) : IResult, IStatu
         return httpContext.Response.WriteAsync(Render());
     }
 
-    private protected string Render ()
-    {
-        var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            WriteMembers(writer);
-            writer.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
-    }
+    private protected string Render () =>
+        JsonSerializer.Serialize(Document(), ProblemJsonContext.Default.ProblemDocument);
 
-    private protected virtual void WriteMembers (Utf8JsonWriter writer)
-    {
-        if (ProblemDetails.Type is { } type) writer.WriteString("type", type);
-        writer.WriteString("title", ProblemDetails.Title ?? ReasonPhrases.Get(StatusCode));
-        writer.WriteNumber("status", StatusCode);
-        if (ProblemDetails.Detail is { } detail) writer.WriteString("detail", detail);
-        if (ProblemDetails.Instance is { } instance) writer.WriteString("instance", instance);
-    }
+    private protected virtual ProblemDocument Document () => new(
+        Type: ProblemDetails.Type,
+        Title: ProblemDetails.Title ?? ReasonPhrases.Get(StatusCode),
+        Status: StatusCode,
+        Detail: ProblemDetails.Detail,
+        Instance: ProblemDetails.Instance,
+        Errors: null);
 }
 
 /// <summary>A 400 problem response listing per-member validation errors.</summary>
@@ -381,18 +369,10 @@ public sealed class ValidationProblem : ProblemHttpResult
 
     public IDictionary<string, string[]> Errors => errors;
 
-    private protected override void WriteMembers (Utf8JsonWriter writer)
-    {
-        base.WriteMembers(writer);
-        writer.WriteStartObject("errors");
-        foreach (var (member, messages) in errors)
-        {
-            writer.WriteStartArray(member);
-            foreach (var message in messages) writer.WriteStringValue(message);
-            writer.WriteEndArray();
-        }
-        writer.WriteEndObject();
-    }
+    private protected override ProblemDocument Document () =>
+        base.Document() with {
+            Errors = errors as Dictionary<string, string[]> ?? new Dictionary<string, string[]>(errors)
+        };
 }
 
 /// <summary>A result that carries a status code.</summary>

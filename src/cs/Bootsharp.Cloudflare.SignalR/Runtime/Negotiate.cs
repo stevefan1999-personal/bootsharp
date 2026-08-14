@@ -1,5 +1,3 @@
-using System.Buffers;
-using System.Text;
 using System.Text.Json;
 
 namespace Bootsharp.Cloudflare.SignalR;
@@ -37,60 +35,29 @@ public static class Negotiate
     /// the client itself does for <c>negotiateVersion &lt; 1</c> (<c>HttpConnection.ts:352-356</c>).
     /// An app that shards signs its Durable Object name into this instead.
     /// </param>
-    public static string Response (string connectionId, string? connectionToken = null)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            writer.WriteNumber("negotiateVersion", 1);
-            writer.WriteString("connectionId", connectionId);
-            writer.WriteString("connectionToken", connectionToken ?? connectionId);
-            writer.WriteStartArray("availableTransports");
-            writer.WriteStartObject();
-            writer.WriteString("transport", Transport);
-            writer.WriteStartArray("transferFormats");
-            writer.WriteStringValue("Text");
-            writer.WriteEndArray();
-            writer.WriteEndObject();
-            writer.WriteEndArray();
-            writer.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
+    public static string Response (string connectionId, string? connectionToken = null) =>
+        JsonSerializer.Serialize(
+            new NegotiateResponseView(
+                NegotiateVersion: 1,
+                ConnectionId: connectionId,
+                ConnectionToken: connectionToken ?? connectionId,
+                AvailableTransports: [new NegotiateTransportView(Transport, ["Text"])]),
+            SignalRJsonContext.Default.NegotiateResponseView);
 
     /// <summary>
     /// A negotiate failure the client aborts on rather than retries
     /// (<c>HttpConnection.ts</c> reads <c>error</c> before anything else).
     /// </summary>
-    public static string Error (string message)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            writer.WriteString("error", message);
-            writer.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
+    public static string Error (string message) =>
+        JsonSerializer.Serialize(new NegotiateErrorView(message), SignalRJsonContext.Default.NegotiateErrorView);
 
     /// <summary>
     /// A redirect response: the client follows <c>url</c> (up to 100 hops) carrying
     /// <c>accessToken</c>. The shape an app uses to hand a connection to another Worker or region.
     /// </summary>
-    public static string Redirect (string url, string? accessToken = null)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            writer.WriteString("url", url);
-            if (accessToken is not null) writer.WriteString("accessToken", accessToken);
-            writer.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
+    public static string Redirect (string url, string? accessToken = null) =>
+        JsonSerializer.Serialize(new NegotiateRedirectView(url, accessToken),
+            SignalRJsonContext.Default.NegotiateRedirectView);
 
     /// <summary>
     /// Whether a request path is the negotiate call for <paramref name="hubPath"/>. The client posts

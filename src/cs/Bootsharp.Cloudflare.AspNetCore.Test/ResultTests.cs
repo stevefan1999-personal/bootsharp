@@ -214,9 +214,9 @@ public class ResultContentTests
 }
 
 /// <summary>
-/// RFC 7807. The body is written with <c>Utf8JsonWriter</c> rather than the serializer, because
-/// <see cref="ProblemDetails.Extensions"/> is a bag of arbitrary values that source-generated
-/// metadata cannot describe.
+/// RFC 7807. The body is serialized through <c>ProblemJsonContext</c>. Extensions are not a
+/// source-generated shape, so this host writes the five known members and the validation
+/// errors map.
 /// </summary>
 public class ProblemResultTests
 {
