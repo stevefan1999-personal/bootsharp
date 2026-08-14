@@ -22,11 +22,37 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The minimal-API driver tests compile the emitted interceptors against the real
+             Bootsharp.Cloudflare.AspNetCore, not against stubs: the whole claim of ADR-0008 §1 is
+             that generated code binds to that package's surface, and a stub could agree with the
+             generator while the package disagrees with both. ReferenceOutputAssembly is false so the
+             assembly does not join this project's own reference set — the existing driver tests
+             compile against source stubs of the runtime, and two definitions of the same type would
+             make every one of them ambiguous. The harness loads it from the path below instead. -->
+        <ProjectReference Include="../Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj"
+                          ReferenceOutputAssembly="false" Private="false"/>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>Bootsharp.Cloudflare.AspNetCore.OutputPath</_Parameter1>
+            <_Parameter2>$(MSBuildThisFileDirectory)../Bootsharp.Cloudflare.AspNetCore/bin/$(Configuration)/net10.0</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <!-- Must track the generator's Roslyn version: it marks the package PrivateAssets="all". -->
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
         <PackageReference Include="xunit" Version="2.9.3" />
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+        <!-- The packages Bootsharp.Cloudflare.AspNetCore references rather than vendors (ADR-0007's
+             identity rule). A library's bin/ carries only its own assembly, so the app compilations
+             the minimal-API harness builds would not resolve IServiceCollection or IOptions<T>
+             without these on this project's reference path. Versions track that package's. -->
+        <PackageReference Include="Microsoft.Extensions.Features" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Primitives" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Net.Http.Headers" Version="10.0.8" />
     </ItemGroup>
 
     <ItemGroup>
