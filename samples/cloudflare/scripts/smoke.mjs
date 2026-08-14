@@ -66,7 +66,8 @@ let exitCode = 1;
 try {
   await waitForReady();
   for (const check of [
-    home, health, kv, d1, d1Grid, freeSql, r2, durableObject, durableObjectSql, queue, workflow,
+    home,
+    health, kv, d1, d1Grid, freeSql, r2, durableObject, durableObjectSql, queue, workflow,
     typedRouteParameter, jsonBody, queryBinding, binaryBody, repeatedSetCookie, passThroughToAssets,
     routerNegatives, cron, chatHub
   ]) {
@@ -93,20 +94,23 @@ process.exit(exitCode);
 
 // -- checks -------------------------------------------------------------------------------------
 
-/** The compiled HTML template, served as the site root. */
+/** The compiled `.cshtml` page, served as the site root. */
 async function home () {
   const response = await fetch(`${origin}/`);
   const html = await response.text();
-  // Context-aware encoding is the whole point of the tier, and the flash hole is where a value the
-  // caller controls reaches element content. Encoding it is the default now, not an opt-in `H()`.
+  // Context-aware encoding is the whole point of both SSR tiers, and the flash hole is where a value
+  // the caller controls reaches element content. Encoding it is the default, not an opt-in `H()`.
   const escaped = await (await fetch(`${origin}/?flash=%3Cscript%3Ex%3C%2Fscript%3E`)).text();
   return assert({
     status: response.status,
     contentType: response.headers.get("content-type"),
-    // The template's own markup, which only exists if HomePage.Render ran through the writer.
+    // The page's own markup, which only exists if HomePage.Render ran through the writer.
     hasPill: html.includes('class="pill"'),
+    // Nothing of MVC or of the Razor compiler survives into what the worker serves.
+    noRazorRuntime: !html.includes("RazorPage") && !html.includes("__RazorDirectiveTokenHelpers"),
     encodesFlash: escaped.includes("&lt;script&gt;") && !escaped.includes("<script>x</script>")
-  }, it => it.status === 200 && it.contentType?.startsWith("text/html") && it.hasPill && it.encodesFlash);
+  }, it => it.status === 200 && it.contentType?.startsWith("text/html") &&
+    it.hasPill && it.noRazorRuntime && it.encodesFlash);
 }
 
 async function health () {

@@ -34,8 +34,9 @@ public sealed class SiteService(ILogger<SiteService> logger)
     public async Task<IResult> Home(string? flash, string? error)
     {
         var model = await LoadHome(flash, error);
-        // The result takes the template, not its output: the writer buffers today and streams once
-        // the transport can, with no change here or in HomePage.
+        // The result takes the page, not its output: the writer buffers today and streams once the
+        // transport can, with no change here or in the page. A.cshtml page compiles
+        // to a static method taking the writer, so converting the page left this call site alone.
         return TypedResults.Html(html => HomePage.Render(html, model));
     }
 

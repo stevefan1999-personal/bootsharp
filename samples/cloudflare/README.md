@@ -44,7 +44,10 @@ comes from `src/cs/Bootsharp.Cloudflare.AspNetCore` (ADR-0008), and the intercep
 handler's parameters at compile time is a second component of `Bootsharp.Cloudflare.Generate`. What
 stays in the sample is what is genuinely per-app: `ICloudflareEnv` (this worker's wrangler bindings,
 which is why the bases are generic over it), the `IWorker` / `IActorRuntime` export contracts, and
-the demo's own routes, services, SSR page and data layer.
+the demo's own routes, services, SSR pages and data layer. The `.cshtml` compiler is a library too —
+`src/cs/Bootsharp.Cloudflare.Razor` (ADR-0011 §3), and the one package here taken as a
+`PackageReference` rather than a `ProjectReference`, because it ships two assemblies under
+`analyzers/` and a project reference carries no analyzer payload.
 
 ## The Minimal API layer
 
@@ -110,10 +113,54 @@ longer carries the placeholder `Redirected` body and its `text/plain` content ty
 the `Location` were ever meaningful), and `404`/`405` from the router are now empty rather than
 carrying a sentence, because they are produced by the matcher and not by a handler.
 
-## Server-rendered HTML
+## Server-rendered HTML: two tiers, one runtime
 
-`backend/Ssr/HomePage.cs` is a **compiled HTML template** (ADR-0011 §1). The authoring surface is
-plain C# — a static method that takes an `HtmlWriter` and whose body is one interpolated string:
+`/` is rendered by `backend/Ssr/HomePage.cshtml`, compiled by `Bootsharp.Cloudflare.Razor`
+(ADR-0011 §3). It was authored as an interpolated-string `[HtmlTemplate]` method first and converted;
+`HomeModel` and the call site in `SiteService` did not change, because a `.cshtml` page compiles to
+the same kind of static method taking the same writer.
+
+Both tiers are shipping library features and both are documented below — the sample simply renders
+its one page with one of them rather than carrying the same markup twice.
+
+### What both tiers are
+
+`Bootsharp.Cloudflare.AspNetCore.Html` — `HtmlWriter`, `HtmlEncoding`, `HtmlString` — is the whole
+runtime, and **neither tier adds to it**. Both compile a page into straight-line `WriteLiteral` /
+`WriteText` / `WriteAttribute` / `WriteUrl` calls on the writer, so a page costs one pass over string
+literals per request and nothing else, and everything below is true of both:
+
+* **Encoding is the default and the context decides it.** Element content and quoted attribute
+  values are encoded; a value in an `href` is also scheme-checked, so `javascript:` becomes
+  `about:invalid` — no amount of quoting would have made that safe. Neither tier has an `H(…)` to
+  forget: the version this replaced encoded **per hole, opt-in**, `{model.Counter}` went out raw
+  (safe only because it is an `int`), and nothing would have caught the first missed call.
+* **Writing markup verbatim takes `HtmlString`**, which makes reviewing every place a page trusts a
+  value one grep. `Ssr/Banner.cs` is the page's only use, and it encodes its own hole before handing
+  the markup back.
+* **Nothing of a view framework is in the worker.** No `RazorPage<TModel>`, no `ViewData`, no
+  `ITagHelper`, no reflection, no `dynamic` — and, on the `.cshtml` tier, no Razor assembly either:
+  the compiler is a build input of the analyzer and never a reference of the app. The smoke check
+  `home` asserts the absence against the served bytes.
+* **The result takes the page, not its output.**
+
+  ```csharp
+  return TypedResults.Html(html => HomePage.Render(html, model));
+  ```
+
+  That is what keeps the API streaming-shaped: `HtmlWriter` buffers today because a worker response
+  body is buffered, and the day a live `ReadableStream` handle can cross the interop boundary
+  (ADR-0007 milestone 0b) a chunk-pushing writer is a second subclass — no page and no route changes.
+
+Output is byte-identical to the hand-encoded interpolated-string version both tiers replaced, for
+every value the sample renders. The one deliberate divergence is `WebUtility.HtmlEncode`'s numeric
+escaping of U+00A0–U+00FF (`é` became `&#233;`): the response states UTF-8, so those characters are
+written as themselves.
+
+### The `[HtmlTemplate]` tier
+
+The authoring surface is plain C# — a static method taking an `HtmlWriter`, whose body is one
+interpolated string:
 
 ```csharp
 [HtmlTemplate]
@@ -124,45 +171,130 @@ public static void Render (HtmlWriter html, HomeModel model) => html.Write($$"""
   """);
 ```
 
-There is no template language, no second file and no `.razor`. `Bootsharp.Cloudflare.Generate` reads
-the markup at build time, runs an HTML tokenizer over the literal segments to work out what each
-hole is from the tags around it, and replaces every call to `Render` with straight-line
-`WriteLiteral` / `WriteText` / `WriteAttribute` / `WriteUrl` calls. The page costs one pass over
-string literals per request.
+No template language, no second file, no build-time dependency at all: it is part of
+`Bootsharp.Cloudflare.Generate`, which every worker already references. The generator runs an HTML
+tokenizer over the literal segments to work out what each hole is from the tags around it, and
+rewrites every call to `Render` into writes.
 
-What that fixes is not speed. The previous version was the same markup with `H(…)` around each hole:
-encoding was **opt-in per hole**, `{model.Counter}` went out raw (safe only because it is an `int`),
-and nothing would have caught the first forgotten call. Now:
-
-* **Encoding is the default and the context decides it.** Element content and quoted attribute
-  values are encoded; a value in an `href` is also scheme-checked, so `javascript:` becomes
-  `about:invalid` — no amount of quoting would have made that safe.
 * **Positions no encoder can rescue are refused at build time.** A hole inside `<script>` or
-  `<style>`, in an unquoted attribute value, in an `on*` handler or in an attribute *name* is
-  error `CFW031`. (`<title>` and `<textarea>` are encoded rather than refused: character references
-  are decoded there, so escaping `<` is exactly what stops a value closing the element.)
-* **Writing markup verbatim takes `HtmlString`**, which makes reviewing every place the page trusts
-  a value one grep. `HomePage.Notice` is the sample's only use: a conditional banner is built as a
-  fragment beside the template and interpolated into it.
+  `<style>`, in an unquoted attribute value, in an `on*` handler or in an attribute *name* is error
+  `CFW031`. (`<title>` and `<textarea>` are encoded rather than refused: character references are
+  decoded there, so escaping `<` is exactly what stops a value closing the element.)
 * **Nothing depends on the generator for correctness.** A template it declines — a different body
   shape, a hole reading a private member, a call from another assembly — renders through the same
   scanner at request time and produces the same bytes, one scan slower, and says so as `CFW032`.
+* **A template is one expression, so it has no control flow.** Anything conditional is a fragment
+  built beside it — a method returning `HtmlString`, interpolated as a hole — and anything repeated
+  is a second template plus the C# loop that calls it. That is the tier's ceiling, it is the reason
+  the other one exists, and it is what the conversion below actually bought.
 
-The result takes the template rather than its output:
+### The `.cshtml` tier
 
-```csharp
-return TypedResults.Html(html => HomePage.Render(html, model));
+`.cshtml` pages compile through `Bootsharp.Cloudflare.Razor` onto the same `HtmlWriter` as
+`[HtmlTemplate]` — Razor *syntax* without the Razor *runtime*. A page is a method:
+`Views/Home.cshtml` becomes `App.Views.Home.Render(html, …)`, `@model T` is sugar for a render
+parameter named `Model`, `@param T name` adds further parameters, a partial is a method call and a
+layout is a `@param HtmlBody body` you invoke with `body(html)`. `@model` is repurposed, not refused:
+that is deliberately syntax familiarity without MVC semantics — there is no `ViewData`/`ViewBag`
+behind it, and those names simply do not resolve. Tag helpers, `@inject`, `@section` and layout
+members are refused by name at the page's own line (CFW060), never silently mis-compiled.
+
+One line of setup, because the package carries its own targets:
+
+```xml
+<PackageReference Include="Bootsharp.Cloudflare.Razor" Version="*-*" />
 ```
 
-That is what keeps the API streaming-shaped: `HtmlWriter` buffers today because a worker response
-body is buffered, and the day a live `ReadableStream` handle can cross the interop boundary
-(ADR-0007 milestone 0b) a chunk-pushing writer is a second subclass — no template and no route
-changes.
+That globs `**/*.cshtml` into `AdditionalFiles` and makes `RootNamespace`/`ProjectDir` visible to the
+generator. **A page is a method**: `Ssr/HomePage.cshtml` compiles to `public static partial class HomePage`
+in `Cloudflare.Backend.Ssr`, carrying `public static void Render(HtmlWriter html, HomeModel Model)`.
+The file name is the class name, which is why the converted page kept the name its `[HtmlTemplate]`
+predecessor had — the call site never learned that the page changed tiers. Worth knowing when
+picking a name: a page called `Home` would be shadowed at any call site inside a class that already
+has a `Home` member, and needs qualifying as `Ssr.Home.Render`.
 
-Output is byte-identical to the interpolated-string version it replaces, for every value the sample
-renders. The one deliberate divergence is `WebUtility.HtmlEncode`'s numeric escaping of
-U+00A0–U+00FF (`é` became `&#233;`): the response states UTF-8, so those characters are written as
-themselves.
+```cshtml
+@model HomeModel
+<span class="pill">runtime @Model.Runtime</span>
+<pre>@(Model.KvValue ?? "(empty)")</pre>
+@Banner.Notice("flash", Model.Flash)
+```
+
+`@model T` declares a parameter named `Model`; `@param T name` declares further ones in source order.
+Everything a page needs arrives as a parameter — there is no `ViewData`, no `ViewBag` and no view
+service locator, and those names simply do not resolve. Composition is a method call: a partial is
+`Card.Render(html, item)`, and a layout is a page taking `@param HtmlBody body` and calling
+`@{ body(html); }` where the content goes.
+
+What makes this work is a *subtraction*. The entire MVC shape of `.cshtml` codegen is one opt-in call
+inside the Razor compiler, `RazorExtensions.Register`; skip it and the compiler emits against
+whatever class, method and parameter list a document classifier pass asks for. So the package pins
+`Microsoft.AspNetCore.Razor.Language` 6.0.36 — the last published build of that compiler assembly,
+netstandard2.0, MIT, zero declared dependencies — ships it beside the generator under `analyzers/`,
+and points it at `HtmlWriter`. The package is `developmentDependency`; nothing from it reaches
+`bin/`, `dist/` or the worker.
+
+**MVC constructs are refused by name, never mis-compiled** — `@page`, `@inject`, `@section`,
+`@inherits`, `@implements`, the tag-helper directives, the layout family (`Layout`, `RenderBody`,
+`RenderSection`, `IsSectionDefined`) and `_ViewImports`/`_ViewStart` are all `CFW060`, each reported
+at its own line with the substitution to use. `CFW061` relocates a Razor syntax error onto the page,
+and `CFW062` catches collisions (two pages under one name, a duplicate `@param`). Left unregistered
+they would not fail — `@inject IFoo Foo` parses as an expression plus literal text and renders the
+wrong thing — so being able to reject them is the reason they are registered at all.
+
+One behaviour worth knowing before writing a page: **Razor elides the leading indentation and the
+trailing newline around a code block that is alone on its line**, so `@if (…) { … }` on its own line
+emits no surrounding whitespace, while an implicit expression like `@Banner.Notice(…)` leaves the
+line's whitespace exactly as written. Five bytes per render, inert in a browser, and the reason this
+page's two conditional banners are a fragment rather than an `@if`: writing them as `@if` is
+**1,475 bytes smaller** — a fragment is built by the *runtime* template handler, which roots the
+request-time scanner a compiled `@if` does not need — but it gives up byte-identity with the page
+this one was converted from, and that identity is the evidence the conversion changed nothing. The
+sample buys the oracle; a page with no such counterpart should prefer the block form. `.editorconfig`
+turns `insert_final_newline` off for `.cshtml` for the same reason: the page ends at `</html>`
+because the template it mirrors did, so a stray final newline would be a sixth byte of difference.
+
+### Which one to pick
+
+|  | `[HtmlTemplate]` | `.cshtml` |
+| --- | --- | --- |
+| Setup | none — already in `Bootsharp.Cloudflare.Generate` | one `PackageReference`, build-time only |
+| Where the markup lives | inside a C# method | its own file |
+| Control flow, loops | a method per branch, sequenced in C# | `@if` / `@foreach` / `@functions` in the markup |
+| Composition | ordinary method calls | the same, plus `@param HtmlBody` layouts |
+| Editor support | C# raw strings | Razor colouring and completion |
+| Refactoring | renames and Find Usages reach into the markup | markup is opaque to C# tooling |
+| Diagnostics | `CFW031`, `CFW032` | `CFW060`–`CFW062` |
+
+Reach for **`[HtmlTemplate]`** when the page is one shape and mostly holes — a fragment, an error
+page, an email body, an OpenGraph head — or when you would rather not take a build-time dependency
+for markup that is six lines long. Reach for **`.cshtml`** when the markup is long enough to want its
+own file, when the page branches or repeats, or when a team already reads Razor.
+
+Cost is close to a wash, and the honest number depends on what you compare. Converting *this*
+sample's home page cost **+338 bytes** of deployable bundle gzip — a controlled A/B on one tree where
+the page is the only difference and both versions render their banners through the same
+`Banner.Notice` fragment. That is the same small-positive regime as the **+61 B** measured on a
+fragment-free page in research/16 §9, and it has the same cause: Razor splits an interpolated
+attribute into several literals where `[HtmlTemplate]` folds one, so the cost scales with attribute
+density rather than page size.
+
+What *is* worth knowing is that the `.cshtml` tier can be substantially cheaper when a page branches,
+because the two tiers are not equally expressive. A `[HtmlTemplate]` body is one expression, so
+anything conditional has to be an `HtmlString` fragment — and a fragment is built by the **runtime**
+template handler, which roots the request-time context scanner at a measured **+1,853 B**. Writing
+this page's two banners as `@if` blocks instead compiles them to straight-line writes that root
+nothing, taking **1,536 B** back off the number above. The sample does not do that, and the reason is
+in the `.cshtml` section: `@if` on its own line changes five bytes of inert whitespace, and keeping
+the output byte-identical to the page this one was converted from is the evidence that the conversion
+was semantically neutral. That evidence was worth more here than the bytes; in an application with no
+such counterpart, the block form is simply cheaper.
+
+Either way both tiers are the same calls on the same writer by the time the linker sees them, and
+every figure here is noise against a 3 MiB ceiling.
+
+Neither of them is `.razor`. `Bootsharp.Cloudflare.Components` is a third tier that **does not run**
+under NativeAOT-LLVM — see the size table below for why — which is what these two exist instead of.
 
 ## Realtime with SignalR
 
@@ -300,6 +432,7 @@ is therefore what creates the entry `wrangler.jsonc` points at.
 dotnet publish
   ├─ Roslyn (Bootsharp.Cloudflare.Generate)   entrypoint projection → CFW diagnostics
   │                                           → ActorRuntime.g.cs (the C# RPC dispatch)
+  ├─ Roslyn (Bootsharp.Cloudflare.Razor)      Ssr/*.cshtml → HtmlWriter calls (build input only)
   ├─ NativeAOT-LLVM link                      → dist/wasm/backend.wasm
   ├─ BootsharpJS                              → dist/js/**  (Bootsharp's own ES modules)
   └─ BootsharpCloudflareWorker (this package) → dist/worker/entrypoints.ts   emitted
@@ -325,7 +458,7 @@ runtime asset. `npm run test:generator` drives both emitters over throwaway comp
 
 ```
 Browser
-  ├─ GET /            → C# SSR (NativeAOT-LLVM WASM)
+  ├─ GET /            → C# SSR from Ssr/HomePage.cshtml  (NativeAOT-LLVM WASM)
   ├─ GET /app/        → static / Blazor WASM assets
   └─ /api/*           → C# Minimal API (Bootsharp.Cloudflare.AspNetCore)
         │
@@ -363,19 +496,20 @@ npm run publish:cs && npm run smoke
 
 `scripts/smoke.mjs` boots this worker under real workerd on port 8797 and exercises **every** route
 plus the three event kinds that are not routes — the cron trigger, a Durable Object, and the hub
-over a WebSocket with the stock `@microsoft/signalr` client. Twenty checks; each asserts the one
-property that could only hold if the whole stack ran, and the full observations land in
+over a WebSocket with the stock `@microsoft/signalr` client. Twenty-one checks; each asserts the
+one property that could only hold if the whole stack ran, and the full observations land in
 `smoke-results.json`.
 
 It is deliberately not a substitute for the C# suites, which assert the same behaviours far more
 finely and in milliseconds. What it covers that they structurally cannot is the crossing itself:
 that the response snapshot survived the interop boundary and that workerd accepted what came back.
-The four checks worth knowing by name are `binaryBody` (eight PNG-signature bytes arrive as those
+The five checks worth knowing by name are `binaryBody` (eight PNG-signature bytes arrive as those
 bytes, not as replacement characters), `repeatedSetCookie` (two `Set-Cookie` headers, read through
 `getSetCookie()` — the only API that can tell them from one comma-joined header),
-`passThroughToAssets` (the worker declining a request without an illegal status code), and
-`chatHub` (a broadcast heard by two connections of one room, and `HubException`'s message arriving
-verbatim).
+`passThroughToAssets` (the worker declining a request without an illegal status code),
+and `chatHub` (a broadcast heard by two connections of one room, and `HubException`'s message
+arriving verbatim). The `home` check also asserts that nothing of the Razor compiler reaches the
+bytes the worker serves.
 
 ## Logging
 
@@ -410,12 +544,13 @@ documented but not encoded in tooling.
 
 | Variant | wasm raw | wasm gzip | notes |
 | --- | --- | --- | --- |
-| full sample (milestone 6) | 10,205,327 | 3,590,979 | bundle gzip **3,821,660 (3,732.09 KiB) — 660 KB over the free ceiling**; paid plan required. The +170,844 B since milestone 5 is the SignalR layer and the chat hub |
+| full sample, `.cshtml` SSR | 10,206,431 | 3,592,167 | bundle gzip **3,822,316 (3,732.73 KiB) — 662 KiB over the free ceiling**; paid plan required. Converting the home page from `[HtmlTemplate]` to `HomePage.cshtml` cost **+338 B** on an otherwise identical tree — the controlled A/B, both pages rendering their banners through the same `Banner.Notice` fragment. `Bootsharp.Cloudflare.Razor` itself weighs nothing: it is a build-time analyzer, nothing from it is referenced by the app, and no Razor assembly reaches `dist/`. The row below also predates the handle-lifetime fix (+359 B on this sample), so the gap to it is not the conversion's price |
+| full sample (milestone 6, one SSR tier) | 10,205,327 | 3,590,979 | bundle gzip **3,821,660 (3,732.09 KiB)**. The +170,844 B since milestone 5 is the SignalR layer and the chat hub |
 | full sample (milestone 5) | 9,710,521 | 3,425,689 | bundle gzip 3,650,816 (3,565.25 KiB), before the hub |
 | without the Minimal API layer | 8,709,761 | 3,082,089 | the same sample on the hand-written shim, measured before the ADR-0008 conversion: bundle gzip 3,293,511. The conversion costs **+357,305 bundle gzip (+348.93 KiB)** — the layer's price *net of* the ~130-line `AspNetShim` it deleted |
 | without FreeSql | 2,044,672 | 786,564 | the ORM costs 75% of the binary (measured on the shim; the Minimal API delta above is additive to it) |
 | without data layer | 2,044,672 | 786,565 | ADO/D1 layer itself is free — FreeSql is the entire cost |
-| without SSR page | 8,679,009 | 3,064,400 | SSR is ~17 KB |
+| without SSR page | 8,679,009 | 3,064,400 | SSR is ~17 KB, measured at milestone 6 when the sample carried one tier |
 | lean baseline | 1,598,716 | 638,448 | [`samples/cloudflare-minimal`](../cloudflare-minimal) as shipped — fetch + KV + structured logging, no DI container, and deliberately **no Minimal API layer**, which is what keeps it usable as the control: bundle gzip **766,915 (748.94 KiB)**, unchanged by this milestone and the figure ADR-0007 budgets every layer against (it supersedes the 1,708,820 / 668,170 "fetch-only floor" estimated before the sample existed) |
 
 ### What the Minimal API layer costs on its own

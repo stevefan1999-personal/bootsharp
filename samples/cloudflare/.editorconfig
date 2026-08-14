@@ -1,0 +1,6 @@
+# A .cshtml page is literal output: every byte between its directives is written to the response
+# verbatim, so whether the file ends with a newline is content rather than formatting. Ssr/HomePage.cshtml
+# deliberately ends at </html>, which is where the [HtmlTemplate] page it mirrors ends, and the two
+# are byte-identical only because of it.
+[*.cshtml]
+insert_final_newline = unset

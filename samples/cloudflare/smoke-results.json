@@ -5,6 +5,7 @@
     "status": 200,
     "contentType": "text/html; charset=utf-8",
     "hasPill": true,
+    "noRazorRuntime": true,
     "encodesFlash": true
   },
   {
@@ -31,7 +32,7 @@
     "check": "d1Grid",
     "pass": true,
     "status": 200,
-    "body": "{\"columns\":[\"id\",\"body\",\"created_at\"],\"rows\":[[31,\"d1-smoke\",\"2026-08-14 10:53:3"
+    "body": "{\"columns\":[\"id\",\"body\",\"created_at\"],\"rows\":[[43,\"d1-smoke\",\"2026-08-14 13:59:1"
   },
   {
     "check": "freeSql",
@@ -48,14 +49,14 @@
   {
     "check": "durableObject",
     "pass": true,
-    "before": 21,
-    "after": 23
+    "before": 27,
+    "after": 29
   },
   {
     "check": "durableObjectSql",
     "pass": true,
     "status": 200,
-    "body": "{\"orm\":\"do-sql\",\"rows\":[[18]]}"
+    "body": "{\"orm\":\"do-sql\",\"rows\":[[21]]}"
   },
   {
     "check": "queue",
@@ -67,13 +68,13 @@
     "check": "workflow",
     "pass": true,
     "status": 303,
-    "location": "/?flash=workflow-8baa0c66-fd2e-49cd-8d8f-0cc354b506fb"
+    "location": "/?flash=workflow-1b1c7b29-a332-453e-b64c-9191a543dc33"
   },
   {
     "check": "typedRouteParameter",
     "pass": true,
     "created": 201,
-    "location": "/api/notes/33",
+    "location": "/api/notes/45",
     "one": 200,
     "wrongType": 404
   },
@@ -134,13 +135,13 @@
     "check": "cron",
     "pass": true,
     "fired": 200,
-    "heartbeat": "{\"lastScheduled\":{\"cron\":\"*/15 * * * *\",\"scheduledTime\":1786704815510,\"scheduledAt\":\"2026-08-14T10:53:35.5100000+00:00\"}}"
+    "heartbeat": "{\"lastScheduled\":{\"cron\":\"*/15 * * * *\",\"scheduledTime\":1786715958427,\"scheduledAt\":\"2026-08-14T13:59:18.4270000+00:00\"}}"
   },
   {
     "check": "chatHub",
     "pass": true,
     "transport": "WebSocketTransport",
-    "who": "2db2b81b-611e-48ea-91f2-fe4da451626e",
+    "who": "9f913aea-6506-4f8c-a41d-2abf1c902312",
     "broadcast": 2,
     "refused": "refused by contract"
   }
