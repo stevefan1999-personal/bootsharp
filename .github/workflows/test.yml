@@ -73,6 +73,16 @@ jobs:
           bash ./.scripts/pack.sh
           cd ../js
           npm run test:llvm
+          # The other two workerd lanes share this job's setup — the LLVM artifacts, the local pack
+          # and the workerd download are the expensive parts, and each lane publishes its own guest
+          # from them. A lane of its own per harness would pay for all three again.
+          #
+          # test:interleave records Durable Object scheduling semantics that no unit test can reach
+          # (input-gate release points, hibernation wake identity); test:signalr drives the hub over
+          # a real socket with the stock @microsoft/signalr client, which is the one claim in
+          # ADR-0010 that is about somebody else's client and so cannot be asserted in-process.
+          npm run test:interleave
+          npm run test:signalr
 
   # Bootsharp.Cloudflare.AspNetCore carries 140 files copied verbatim from dotnet/aspnetcore, with
   # every local change expressed as a declarative transform in Vendored/manifest.json rather than as
