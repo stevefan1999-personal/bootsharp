@@ -551,7 +551,7 @@ documented but not encoded in tooling.
 | without FreeSql | 2,044,672 | 786,564 | the ORM costs 75% of the binary (measured on the shim; the Minimal API delta above is additive to it) |
 | without data layer | 2,044,672 | 786,565 | ADO/D1 layer itself is free — FreeSql is the entire cost |
 | without SSR page | 8,679,009 | 3,064,400 | SSR is ~17 KB, measured at milestone 6 when the sample carried one tier |
-| lean baseline | 1,598,716 | 638,448 | [`samples/cloudflare-minimal`](../cloudflare-minimal) as shipped — fetch + KV + structured logging, no DI container, and deliberately **no Minimal API layer**, which is what keeps it usable as the control: bundle gzip **766,915 (748.94 KiB)**, unchanged by this milestone and the figure ADR-0007 budgets every layer against (it supersedes the 1,708,820 / 668,170 "fetch-only floor" estimated before the sample existed) |
+| lean baseline | 1,600,722 | 639,356 | [`samples/cloudflare-minimal`](../cloudflare-minimal) as shipped — fetch + KV + structured logging, no DI container, and deliberately **no Minimal API layer**, which is what keeps it usable as the control: bundle gzip **768,768 (750.75 KiB)** as of the handle-lifetime fix — the figure ADR-0007 budgets every layer against (it read 766,915 before milestone 6 and 768,154 before that fix; all three are the same sample at three dates) (it supersedes the 1,708,820 / 668,170 "fetch-only floor" estimated before the sample existed) |
 
 ### What the Minimal API layer costs on its own
 
@@ -562,7 +562,7 @@ nothing else changed — same bindings, same responses byte for byte, same `wran
 
 | Variant | wasm raw | wasm gzip | bundle gzip |
 | --- | --- | --- | --- |
-| lean baseline, hand-routed | 1,598,716 | 638,448 | 766,915 (748.94 KiB) |
+| lean baseline, hand-routed | 1,600,722 | 639,356 | 768,768 (750.75 KiB) |
 | lean baseline, Minimal API | 2,530,379 | 1,010,127 | 1,147,249 (1,120.36 KiB) |
 | **`Bootsharp.Cloudflare.AspNetCore`** | **+931,663** | **+371,679** | **+380,334 (+371.42 KiB)** |
 

@@ -19,7 +19,7 @@ plus the JS glue — not the wasm file alone (ADR-0006 §5).
 
 | | wasm raw | wasm gzip | bundle gzip | vs. free-plan ceiling |
 | --- | --- | --- | --- | --- |
-| this sample | 1,600,722 | 639,356 | **768,154** (750.15 KiB) | 2,377,574 B of headroom |
+| this sample | 1,600,722 | 639,356 | **768,768** (750.75 KiB) | 2,377,574 B of headroom |
 | free-plan ceiling | | | 3,145,728 | enforced (API error 10027) |
 | [`samples/cloudflare`](../cloudflare) | 10,205,327 | 3,590,979 | 3,821,660 | 675,932 over — paid plan, because of FreeSql |
 
@@ -48,7 +48,7 @@ at zero), publish NativeAOT-LLVM, read `wrangler check startup`.
 
 | Probe | wasm raw | wasm gzip | bundle gzip | vs. this sample |
 | --- | --- | --- | --- | --- |
-| this sample (control) | 1,600,722 | 639,356 | 768,154 (750.15 KiB) | — |
+| this sample (control) | 1,600,722 | 639,356 | 768,768 (750.75 KiB) | — |
 | \+ one plain Durable Object | 1,657,466 | 657,126 | 791,265 (772.72 KiB) | +23,111 |
 | \+ `.SignalR` (hub, room DO, groups) | 2,280,408 | 895,526 | 1,033,329 (1009.11 KiB) | +265,175 |
 | \+ `.AspNetCore` (routes, binding, writer page) | 2,435,377 | 976,889 | 1,112,279 (1086.21 KiB) | +344,125 |
