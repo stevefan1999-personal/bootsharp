@@ -1,4 +1,4 @@
-using System.Text;
+using System.Text.Json;
 
 namespace Interleave.Harness;
 
@@ -125,33 +125,17 @@ public sealed class Hub : IHub
     public string Report (int actor)
     {
         var state = Resolve(actor);
-        var json = new StringBuilder();
-        json.Append("{\"isolateBornAt\":").Append(isolateBornAt);
-        json.Append(",\"constructions\":").Append(state.Constructions);
-        json.Append(",\"actor\":").Append(actor);
-        json.Append(",\"peakDepth\":").Append(state.PeakDepth);
-        json.Append(",\"depth\":").Append(state.Depth);
-        json.Append(",\"runtime\":").Append(Json.Quote(".NET " + Environment.Version));
-        json.Append(",\"conversations\":{");
-        var first = true;
-        foreach (var pair in state.Conversations)
-        {
-            if (!first) json.Append(',');
-            first = false;
-            json.Append(Json.Quote(pair.Key)).Append(':').Append(pair.Value);
-        }
-        json.Append("},\"trace\":[");
-        for (var index = 0; index < state.Trace.Count; index++)
-        {
-            var entry = state.Trace[index];
-            if (index > 0) json.Append(',');
-            json.Append("{\"step\":").Append(entry.Step)
-                .Append(",\"at\":").Append(entry.At)
-                .Append(",\"event\":").Append(Json.Quote(entry.Event))
-                .Append(",\"detail\":").Append(Json.Quote(entry.Detail))
-                .Append(",\"depth\":").Append(entry.Depth).Append('}');
-        }
-        return json.Append("]}").ToString();
+        return JsonSerializer.Serialize(
+            new InterleaveReport(
+                isolateBornAt,
+                state.Constructions,
+                actor,
+                state.PeakDepth,
+                state.Depth,
+                ".NET " + Environment.Version,
+                state.Conversations,
+                [.. state.Trace.Select(entry => new TraceEntry(entry.Step, entry.At, entry.Event, entry.Detail, entry.Depth))]),
+            ApiJsonContext.Default.InterleaveReport);
     }
 
     private static Scope Resolve (int actor) =>

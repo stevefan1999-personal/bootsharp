@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Llvm.Exercise;
 
 /// <summary>
@@ -22,10 +24,10 @@ public sealed class Worker : WorkerEntrypoint<IExerciseEnv, ExerciseResponse>, I
         try
         {
             var url = new Uri(request.Url, UriKind.Absolute);
-            if (url.AbsolutePath != "/probe") return Reply(404, """{"error":"not found"}""");
+            if (url.AbsolutePath != "/probe") return Reply(404, Write(new ErrorView("not found")));
             return Reply(200, await Probe());
         }
-        catch (Exception error) { return Reply(500, $$"""{"error":{{Json.Quote(error.ToString())}}}"""); }
+        catch (Exception error) { return Reply(500, Write(new ErrorView(error.ToString()))); }
         finally { WorkerContext.Clear(); }
     }
 
@@ -65,22 +67,25 @@ public sealed class Worker : WorkerEntrypoint<IExerciseEnv, ExerciseResponse>, I
             catch (Exception error) { staleThrew = true; staleError = error.Message; }
         heldInvocationHandle = freshStub;
 
-        return $$"""
-            {"invocation":{{invocation}},
-             "awaitedInt":{{awaitedInt}},
-             "awaitedIntType":{{Json.Quote(awaitedInt.GetType().Name)}},
-             "isolateHandleHeld":{{Lower(heldIsolateHandle is not null)}},
-             "isolateHandleSameProxy":{{Lower(isolateSameProxy)}},
-             "isolateHandleUsable":{{Lower(isolateUsable)}},
-             "isolateHandleError":{{Json.Quote(isolateError)}},
-             "invocationHandleSameProxy":{{Lower(invocationSameProxy)}},
-             "staleInvocationHandleThrew":{{Lower(staleThrew)}},
-             "staleInvocationHandleError":{{Json.Quote(staleError)}},
-             "runtime":{{Json.Quote(".NET " + Environment.Version)}}}
-            """;
+        return Write(new ProbeReport(
+            invocation,
+            awaitedInt,
+            awaitedInt.GetType().Name,
+            heldIsolateHandle is not null,
+            isolateSameProxy,
+            isolateUsable,
+            isolateError,
+            invocationSameProxy,
+            staleThrew,
+            staleError,
+            ".NET " + Environment.Version));
     }
 
-    private static string Lower (bool value) => value ? "true" : "false";
+    private static string Write (ErrorView value) =>
+        JsonSerializer.Serialize(value, ApiJsonContext.Default.ErrorView);
+
+    private static string Write (ProbeReport value) =>
+        JsonSerializer.Serialize(value, ApiJsonContext.Default.ProbeReport);
 
     private static ExerciseResponse Reply (int status, string body) =>
         new(status, """{"content-type":"application/json; charset=utf-8"}""", body);
