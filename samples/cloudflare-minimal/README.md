@@ -82,6 +82,18 @@ not reproduce. The renderer itself is correct — it passes the whole
 `Bootsharp.Cloudflare.Components.Test` suite on CoreCLR — so this is a toolchain defect that
 nothing in this repository can fix, and the number above is recorded for the day it is fixed.
 
+The trim audit ADR-0011 §2 gates the tier on was run anyway, on that same probe with
+`TrimMode=full` and `TrimmerSingleWarn=false`. It answers the question the ADR actually asked —
+the `Components.Forms` / `Validation` / `Authorization` transitive chain trims to **nothing**, and
+contributes no warning. What remains is four `IL2072`s, all inside
+`Microsoft.AspNetCore.Components` itself and all one pattern: `Object.GetType()` returns an
+unannotated `Type` that is then passed somewhere demanding `DynamicallyAccessedMemberTypes.All` —
+in `ComponentProperties.SetProperties` (twice), `ComponentFactory.PerformPropertyInjection` and
+`CascadingParameterState.FindCascadingParameters`. All four are on the parameter- and
+`[Inject]`-assignment paths, whose target types this package already annotates `All` at the entry
+point (`ComponentRenderer.RenderAsync<TComponent>`), so the members they reach are rooted by that
+annotation rather than by luck.
+
 Two corrections to earlier figures, both from re-measuring rather than from a change in the code:
 the AspNetCore layer was recorded at +380,334 B against a four-route rewrite, and reads +344,125 B
 here against a three-route probe that also renders a compiled writer page — the same layer, a
