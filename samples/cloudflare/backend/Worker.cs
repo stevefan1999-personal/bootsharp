@@ -1,4 +1,3 @@
-using Cloudflare.Backend.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Cloudflare.Backend;
@@ -14,30 +13,30 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger)
     /// <summary>KV key holding the heartbeat written by <see cref="Scheduled"/>.</summary>
     public const string ScheduledHeartbeatKey = "last-scheduled";
 
+    /// <summary>
+    /// Hands the live request to the application.
+    /// </summary>
+    /// <remarks>
+    /// The snapshot this method used to build by hand — method, url, path, query, headers, body
+    /// is now taken inside <see cref="WebApplication.InvokeAsync"/>, which also owns the per-event
+    /// DI scope and the <c>HttpContext</c> lifetime. What is left here is what is
+    /// genuinely the worker's: setting the ambient <c>env</c> for the invocation and clearing it.
+    /// </remarks>
     public override async Task<HttpResponseData> Fetch(IJsRequest request, ICloudflareEnv env)
     {
         await Task.Yield();
         WorkerContext.Set(env);
-        try
-        {
-            var uri = new Uri(request.Url, UriKind.Absolute);
-            var body = request.Method is "GET" or "HEAD" ? "" : await request.Text();
-            var data = new HttpRequestData(
-                request.Method,
-                request.Url,
-                uri.AbsolutePath,
-                uri.Query,
-                request.HeadersJson,
-                body,
-                request.CfJson);
-            return await app.InvokeAsync(data);
-        }
+        try { return await app.InvokeAsync(request); }
         catch (Exception ex)
         {
-            // Operators get the detail through Workers Logs, the caller an opaque 500. Nothing is
-            // read off the request here: that handle may be what failed in the first place.
+            // InvokeAsync already turns an exception from the pipeline into a 500, so reaching here
+            // means the failure was outside it — reading the request handle, or the env itself.
+            // Operators get the detail through Workers Logs, the caller an opaque 500.
             logger.LogError(ex, "worker fetch failed");
-            return Results.Text("Internal server error", 500).ToResponse();
+            return new HttpResponseData(
+                StatusCodes.Status500InternalServerError,
+                "{\"content-type\":\"text/plain; charset=utf-8\"}",
+                "Internal server error");
         }
         finally
         {
@@ -78,7 +77,7 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger)
     }
 
     /// <summary>
-    /// A cron run has no response to return, so which trigger fired and when is persisted to KV —
+    /// A cron run has no response to return, so which trigger fired and when is persisted to KV
     /// that record is the only observable evidence the scheduled handler ran.
     /// </summary>
     private static string Heartbeat(IScheduledController controller)

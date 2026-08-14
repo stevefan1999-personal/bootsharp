@@ -94,7 +94,7 @@ public static class HomePage
       <span class="pill">host {{H(model.Host)}}</span>
       <span class="pill">workers-types {{H(model.WorkersTypes)}}</span>
       <span class="pill">LLVM wasm</span>
-      <span class="pill">ASP.NET Core shim</span>
+      <span class="pill">ASP.NET Core Minimal API</span>
     </div>
     {{flash}}{{error}}
   </header>
@@ -102,6 +102,7 @@ public static class HomePage
     <a href="/">SSR home</a>
     <a href="/app/">Blazor WASM</a>
     <a href="/api/health">health JSON</a>
+    <a href="/api/echo?text=bootsharp&amp;times=3">query binding</a>
   </nav>
   <main>
     <article>
@@ -122,7 +123,8 @@ public static class HomePage
         <input name="body" placeholder="note text" required/>
         <button type="submit">Insert</button>
       </form>
-      <p><a href="/api/d1-grid">typed grid</a> · <a href="/api/freesql">FreeSql JSON</a></p>
+      <p><a href="/api/d1-grid">typed grid</a> · <a href="/api/freesql">FreeSql JSON</a> ·
+         <a href="/api/notes/1">note by <code>{id:int}</code></a></p>
       <form method="post" action="/api/freesql">
         <input name="body" placeholder="freesql insert" required/>
         <button type="submit">Insert via FreeSql</button>

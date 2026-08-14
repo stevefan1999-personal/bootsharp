@@ -1,25 +1,17 @@
 namespace Cloudflare.Backend;
 
-/// <summary>HTTP request snapshot used by the ASP.NET Core shim after C# reads the live Request.</summary>
-public sealed record HttpRequestData(
-    string Method,
-    string Url,
-    string Path,
-    string Query,
-    string HeadersJson,
-    string Body,
-    string? CfJson = null);
-
-/// <summary>HTTP response snapshot. Status 0 means "serve static assets".</summary>
-public sealed record HttpResponseData(
-    int Status,
-    string HeadersJson,
-    string Body);
-
 /// <summary>
 /// Exported WASM surface. The generated JS <c>WorkerEntrypoint</c> JSImports
 /// <see cref="IJsRequest"/> and <see cref="ICloudflareEnv"/> into these methods.
 /// </summary>
+/// <remarks>
+/// The request/response snapshot records this file used to declare are gone: the request never
+/// becomes a record at all now (<c>WebApplication.InvokeAsync</c> takes the live
+/// <see cref="IJsRequest"/> handle), and the response is
+/// <see cref="Bootsharp.Cloudflare.AspNetCore.HttpResponseData"/> — the same three fields, owned by
+/// the package that also owns the <c>js/runtime.mjs</c> <c>toResponse</c> reading them, so the
+/// contract has one definition instead of two that could drift.
+/// </remarks>
 public interface IWorker
 {
     Task<HttpResponseData> Fetch(IJsRequest request, ICloudflareEnv env);

@@ -2,7 +2,6 @@ using Bootsharp;
 using Bootsharp.Cloudflare.Logging;
 using Bootsharp.Inject;
 using Cloudflare.Backend;
-using Cloudflare.Backend.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -23,9 +22,18 @@ builder.Services.AddSingleton<IWorker>(sp => new Worker(
     sp.GetRequiredService<ILogger<Worker>>()));
 builder.Services.AddBootsharp();
 AddJsonLogging(builder.Services);
+// Bootsharp.Cloudflare.AspNetCore starts with an empty JSON resolver chain by design:
+// there is no reflective fallback behind it, so serialization is closed-world and the app says
+// which context describes it.
+builder.Services.ConfigureHttpJsonOptions(options => options.AddContext(ApiJsonContext.Default));
 var app = builder.Build();
 holder.App = app;
 app.MapCloudflare();
+// Seals the endpoint table and builds the pipeline. It does not block — workerd owns the process,
+// so there is nothing to wait on — but it is where the JSON metadata every endpoint needs is
+// resolved, which is what makes a type missing from ApiJsonContext a boot failure naming the type
+// rather than a 500 on the first request that would have serialized it.
+app.Run();
 app.Services.RunBootsharp();
 
 // Microsoft.Extensions.Logging's own AddLogging resolves filters through the options and

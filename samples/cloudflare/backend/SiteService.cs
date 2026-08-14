@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cloudflare.Backend.Data;
 using Cloudflare.Backend.Hosting;
 using Cloudflare.Backend.Ssr;
@@ -10,6 +11,13 @@ namespace Cloudflare.Backend;
 /// Request handlers. Cloudflare product bindings come from the per-request
 /// <see cref="WorkerContext.Env"/> handle (C# JSImport into workerd).
 /// </summary>
+/// <remarks>
+/// Every method takes the values it needs rather than an <see cref="HttpContext"/> it has to dig
+/// through: the generator binds route values, query values and the JSON body at compile time
+///so a handler's signature is its contract. The ones that still take an
+/// <see cref="HttpRequest"/> are the HTML form posts, which read a urlencoded body this package
+/// deliberately does not parse — see <see cref="FormBody"/>.
+/// </remarks>
 public sealed class SiteService(ILogger<SiteService> logger)
 {
     private static IKvNamespace kv => WorkerContext.Env.KV;
@@ -20,135 +28,187 @@ public sealed class SiteService(ILogger<SiteService> logger)
     private static IWorkflow workflow => WorkerContext.Env.WORKFLOW;
     private static string environment => WorkerContext.Env.ENVIRONMENT;
 
-    public async Task<IResult> Home(HttpContext ctx)
+    /// <summary>Newest-first note rows; the three list routes and the SSR page differ only in LIMIT.</summary>
+    private const string selectNotes = "SELECT id, body, created_at FROM notes ORDER BY id DESC";
+
+    public async Task<IResult> Home(string? flash, string? error) =>
+        Html(HomePage.Render(await LoadHome(flash, error)));
+
+    public IResult Health() => TypedResults.Ok(new HealthView(
+        Ok: true,
+        Runtime: ".NET " + Environment.Version,
+        Framework: "bootsharp-nativeaot-llvm",
+        WorkersTypes: WorkersTypes.Version,
+        Environment: environment));
+
+    public async Task<IResult> GetKv(string? key)
     {
-        var query = ParseQuery(ctx.Request.Query);
-        query.TryGetValue("flash", out var flash);
-        query.TryGetValue("error", out var error);
-        return Results.Html(HomePage.Render(await LoadHome(flash, error)));
+        key ??= "demo";
+        return TypedResults.Ok(new ValueView(key, await kv.Get(key)));
     }
 
-    public async Task<IResult> Health(HttpContext ctx)
+    public async Task<IResult> PutKv(HttpRequest request)
     {
-        var runtime = ".NET " + Environment.Version;
-        return Results.Json("{\"ok\":true,\"runtime\":\"" + Json.Escape(runtime) + "\",\"framework\":\"bootsharp-nativeaot-llvm\",\"workersTypes\":\"" + WorkersTypes.Version + "\",\"environment\":\"" + Json.Escape(environment) + "\"}");
+        var form = await FormBody.ReadAsync(request);
+        await kv.Put(form.Get("key", "demo"), form.Get("value"), null);
+        return Flash.Home("kv-updated");
     }
 
-    public async Task<IResult> GetKv(HttpContext ctx)
+    /// <summary>Passes D1's own <c>success</c>/<c>meta</c>/<c>results</c> envelope through verbatim.</summary>
+    /// <remarks>Decoding it only to re-encode the same document would cost two passes over the same
+    /// bytes and would hide the <c>meta</c> block, which is half of what this route exists to show.
+    /// <c>/api/notes/{id:int}</c> is where the typed shape is demonstrated instead, because there a
+    /// single row is decoded anyway.</remarks>
+    public async Task<IResult> GetD1() => JsonText(await db.Prepare(selectNotes + " LIMIT 20").All());
+
+    public async Task<IResult> GetD1Grid()
     {
-        var key = Query(ctx, "key") ?? "demo";
-        var value = await kv.Get(key);
-        return Results.Json("{\"key\":\"" + Json.Escape(key) + "\",\"value\":" + Json.Quote(value) + "}");
+        var grid = await db.Prepare(selectNotes + " LIMIT 5").Grid();
+        return JsonText("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Json.Escape(c) + "\"")) +
+                        "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
     }
 
-    public async Task<IResult> PutKv(HttpContext ctx)
+    /// <summary>
+    /// <c>GET /api/notes/{id:int}</c> — a typed route parameter end to end.
+    /// </summary>
+    /// <remarks>
+    /// The <c>:int</c> constraint is enforced by the matcher, so <c>/api/notes/abc</c> is a 404 (no
+    /// endpoint matched) rather than a 400 from a failed parse, which is ASP.NET Core's behaviour
+    /// too. <paramref name="id"/> arrives already parsed — the handler never sees a string.
+    /// </remarks>
+    public async Task<IResult> GetNote(int id)
     {
-        var form = ParseForm(ctx.Request.Body);
-        await kv.Put(form.GetValueOrDefault("key", "demo"), form.GetValueOrDefault("value", ""), null);
-        return SeeHome("kv-updated");
+        var note = await ReadNote(id);
+        return note is null
+            ? TypedResults.Problem(detail: $"No note with id {id}.", statusCode: StatusCodes.Status404NotFound)
+            : TypedResults.Ok(note);
     }
 
-    public async Task<IResult> GetD1(HttpContext ctx)
+    /// <summary>
+    /// <c>POST /api/notes</c> — a JSON request body bound through source-generated metadata.
+    /// </summary>
+    /// <remarks>Answers <c>201 Created</c> with the row as stored, which is what makes the round
+    /// trip observable: the id and the timestamp are the database's, not the caller's.</remarks>
+    public async Task<IResult> CreateNote(NoteInput note)
     {
-        var rows = await db.Prepare("SELECT id, body, created_at FROM notes ORDER BY id DESC LIMIT 20").All();
-        return Results.Json(rows);
+        if (string.IsNullOrWhiteSpace(note.Body))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> {
+                ["body"] = ["A note body is required."]
+            });
+        // RunGrid carries the insert's meta, so the row is read back by its own id rather than by
+        // "whatever is newest" — which a concurrent insert would make the wrong row.
+        var inserted = await db.Prepare("INSERT INTO notes (body) VALUES (?)").Bind([note.Body]).RunGrid();
+        var created = await ReadNote((int)inserted.LastRowId);
+        return created is null
+            ? TypedResults.Problem(detail: "The note was inserted but could not be read back.")
+            : TypedResults.Created($"/api/notes/{created.Id}", created);
     }
 
-    public async Task<IResult> GetD1Grid(HttpContext ctx)
-    {
-        var grid = await db.Prepare("SELECT id, body, created_at FROM notes ORDER BY id DESC LIMIT 5").Grid();
-        return Results.Json("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Json.Escape(c) + "\"")) + "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
-    }
+    /// <summary>
+    /// <c>GET /api/echo</c> — query binding: one required value, one with a compile-time default.
+    /// </summary>
+    /// <remarks>A missing <c>text</c> is a 400 the generated binder produces before this method is
+    /// entered; a non-numeric <c>times</c> is the same. Neither check is written here.</remarks>
+    public IResult Echo(string text, int times) =>
+        TypedResults.Ok(new EchoView(text, times, string.Join(" ", Enumerable.Repeat(text, Math.Clamp(times, 1, 10)))));
 
-    public async Task<IResult> GetFreeSql(HttpContext ctx)
+    public async Task<IResult> GetFreeSql()
     {
         using var fsql = FreeSqlNotes.Open(db);
         var notes = await fsql.Select<FreeSqlNote>().OrderByDescending(n => n.Id).Take(20).ToListAsync();
-        var json = "[" + string.Join(",", notes.Select(n =>
-            "{\"id\":" + n.Id + ",\"body\":" + Json.Quote(n.Body) + ",\"created_at\":" + Json.Quote(n.CreatedAt) + "}")) + "]";
-        return Results.Json("{\"orm\":\"freesql\",\"notes\":" + json + "}");
+        return TypedResults.Ok(new FreeSqlView("freesql",
+            [.. notes.Select(n => new NoteView(n.Id, n.Body, n.CreatedAt))]));
     }
 
-    public async Task<IResult> PostFreeSql(HttpContext ctx)
+    public async Task<IResult> PostFreeSql(HttpRequest request)
     {
-        var form = ParseForm(ctx.Request.Body);
+        var form = await FormBody.ReadAsync(request);
         using var fsql = FreeSqlNotes.Open(db);
-        await fsql.Insert(new FreeSqlNote { Body = form.GetValueOrDefault("body", "") }).ExecuteAffrowsAsync();
-        return SeeHome("freesql-inserted");
+        await fsql.Insert(new FreeSqlNote { Body = form.Get("body") }).ExecuteAffrowsAsync();
+        return Flash.Home("freesql-inserted");
     }
 
-    public async Task<IResult> PostD1(HttpContext ctx)
+    public async Task<IResult> PostD1(HttpRequest request)
     {
-        var form = ParseForm(ctx.Request.Body);
-        await db.Prepare("INSERT INTO notes (body) VALUES (?)").Bind([form.GetValueOrDefault("body", "")]).Run();
-        return SeeHome("d1-inserted");
+        var form = await FormBody.ReadAsync(request);
+        await db.Prepare("INSERT INTO notes (body) VALUES (?)").Bind([form.Get("body")]).Run();
+        return Flash.Home("d1-inserted");
     }
 
-    public async Task<IResult> GetR2(HttpContext ctx)
+    public async Task<IResult> GetR2(string? key)
     {
-        var key = Query(ctx, "key") ?? "hello.txt";
+        key ??= "hello.txt";
         var obj = await r2.Get(key);
-        var text = obj is null ? null : await obj.Text();
-        return Results.Json("{\"key\":\"" + Json.Escape(key) + "\",\"value\":" + Json.Quote(text) + "}");
+        return TypedResults.Ok(new ValueView(key, obj is null ? null : await obj.Text()));
     }
 
-    public async Task<IResult> PutR2(HttpContext ctx)
+    public async Task<IResult> PutR2(HttpRequest request)
     {
-        var form = ParseForm(ctx.Request.Body);
-        await r2.Put(form.GetValueOrDefault("key", "hello.txt"), form.GetValueOrDefault("value", ""), null);
-        return SeeHome("r2-put");
+        var form = await FormBody.ReadAsync(request);
+        await r2.Put(form.Get("key", "hello.txt"), form.Get("value"), null);
+        return Flash.Home("r2-put");
     }
 
-    public async Task<IResult> GetCounter(HttpContext ctx)
-    {
-        var n = await counter.GetByName("global").Get();
-        return Results.Json("{\"name\":\"global\",\"value\":" + n + "}");
-    }
+    public async Task<IResult> GetCounter() =>
+        TypedResults.Ok(new CounterView("global", await counter.GetByName("global").Get()));
 
-    public async Task<IResult> IncrementCounter(HttpContext ctx)
+    public async Task<IResult> IncrementCounter()
     {
         var n = await counter.GetByName("global").Increment();
-        return SeeHome("do-incremented-" + n);
+        return Flash.Home("do-incremented-" + n);
     }
 
-    public async Task<IResult> GetDoSql(HttpContext ctx)
+    public async Task<IResult> GetDoSql() =>
+        JsonText("{\"orm\":\"do-sql\",\"rows\":" + await counter.GetByName("global").SqlDemo() + "}");
+
+    public async Task<IResult> SendQueue(HttpRequest request)
     {
-        var rows = await counter.GetByName("global").SqlDemo();
-        return Results.Json("{\"orm\":\"do-sql\",\"rows\":" + rows + "}");
+        var form = await FormBody.ReadAsync(request);
+        await queue.Send(new QueueMessage(form.Get("body", "hello")));
+        return Flash.Home("queue-sent");
     }
 
-    public async Task<IResult> SendQueue(HttpContext ctx)
+    public async Task<IResult> StartWorkflow(HttpRequest request)
     {
-        var form = ParseForm(ctx.Request.Body);
-        await queue.Send(new QueueMessage(form.GetValueOrDefault("body", "hello")));
-        return SeeHome("queue-sent");
-    }
-
-    public async Task<IResult> StartWorkflow(HttpContext ctx)
-    {
-        var form = ParseForm(ctx.Request.Body);
-        var userId = form.GetValueOrDefault("userId", "demo");
+        var form = await FormBody.ReadAsync(request);
+        var userId = form.Get("userId", "demo");
         var instance = await workflow.Create(new WorkflowInstanceCreateOptions
         {
             Params = "{\"userId\":\"" + Json.Escape(userId) + "\"}"
         });
-        return SeeHome("workflow-" + instance.Id);
+        return Flash.Home("workflow-" + instance.Id);
     }
 
     /// <summary>
     /// Serves the heartbeat the cron handler stored, so a scheduled run is observable over HTTP.
     /// The stored value is already JSON, so it is embedded rather than re-encoded.
     /// </summary>
-    public async Task<IResult> GetScheduled(HttpContext ctx)
+    public async Task<IResult> GetScheduled()
     {
         var heartbeat = await kv.Get(Worker.ScheduledHeartbeatKey);
         // Template arguments become their own fields in Workers Logs, so "did the cron ever run in
         // this environment" is answerable by filtering on the field rather than grepping messages.
         logger.LogInformation("scheduled heartbeat read {Found} in {Environment}", heartbeat is not null, environment);
-        return Results.Json("{\"lastScheduled\":" + (heartbeat ?? "null") + "}");
+        return JsonText("{\"lastScheduled\":" + (heartbeat ?? "null") + "}");
     }
 
-    public Task<IResult> Assets(HttpContext ctx) => Task.FromResult(Results.Assets());
+    /// <summary>
+    /// The post-guest fallback to the assets binding: status 0 tells <c>js/runtime.mjs</c> that this
+    /// worker declined the request, and it re-issues it against <c>ASSETS</c>.
+    /// </summary>
+    /// <remarks>Rarely reached — <c>[WorkerAssets]</c> makes the JS side answer <c>/app</c> before
+    /// .NET is booted at all — but it keeps the fallback true for any prefix not declared there.</remarks>
+    public IResult Assets() => TypedResults.StatusCode(0);
+
+    /// <summary>Reads one <c>notes</c> row, or null when there is none.</summary>
+    /// <remarks><c>ID1PreparedStatement.First()</c> answers with the row as a JSON object — the shape
+    /// <see cref="NoteView"/> describes — where <c>All()</c> answers with D1's whole
+    /// <c>success</c>/<c>meta</c>/<c>results</c> envelope, which is what <c>/api/d1</c> passes through.
+    /// D1's bind() takes its values as strings across the interop boundary; the parse happened in the
+    /// generated binder, so what is round-tripped here is already known to be an integer.</remarks>
+    private static async Task<NoteView?> ReadNote(int id) => NoteRows.Read(
+        await db.Prepare("SELECT id, body, created_at FROM notes WHERE id = ? LIMIT 1")
+            .Bind([id.ToString(CultureInfo.InvariantCulture)]).First());
 
     private async Task<HomeModel> LoadHome(string? flash, string? error)
     {
@@ -158,7 +218,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
         var n = 0;
         string? loadError = error;
         try { kvValue = await kv.Get("demo"); } catch (Exception ex) { loadError = Join(loadError, "kv: " + ex.Message); }
-        try { d1 = await db.Prepare("SELECT id, body, created_at FROM notes ORDER BY id DESC LIMIT 10").All(); }
+        try { d1 = await db.Prepare(selectNotes + " LIMIT 10").All(); }
         catch (Exception ex) { loadError = Join(loadError, "d1: " + ex.Message); }
         try
         {
@@ -181,29 +241,10 @@ public sealed class SiteService(ILogger<SiteService> logger)
         };
     }
 
-    private static IResult SeeHome(string flash) => Results.Redirect("/?flash=" + Uri.EscapeDataString(flash));
-
-    private static string? Query(HttpContext ctx, string key)
-    {
-        ParseQuery(ctx.Request.Query).TryGetValue(key, out var value);
-        return value;
-    }
-
-    private static Dictionary<string, string> ParseQuery(string query)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrEmpty(query)) return result;
-        var q = query[0] == '?' ? query[1..] : query;
-        foreach (var part in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var eq = part.IndexOf('=');
-            if (eq < 0) result[Uri.UnescapeDataString(part)] = "";
-            else result[Uri.UnescapeDataString(part[..eq])] = Uri.UnescapeDataString(part[(eq + 1)..].Replace('+', ' '));
-        }
-        return result;
-    }
-
-    private static Dictionary<string, string> ParseForm(string body) => ParseQuery(body);
+    // TypedResults.Content appends the charset, so these two read as one decision each rather than
+    // as a content-type literal repeated at every call site.
+    private static IResult Html(string html) => TypedResults.Content(html, "text/html");
+    private static IResult JsonText(string json) => TypedResults.Content(json, "application/json");
 
     private static string Join(string? left, string right) => string.IsNullOrEmpty(left) ? right : left + "; " + right;
 }

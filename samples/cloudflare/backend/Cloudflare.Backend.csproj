@@ -38,6 +38,11 @@
              no longer reaches the library: restore and build need /p:MSBuildEnableWorkloadResolver=false
              on the command line, which is why every documented sample command passes it. -->
         <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj" />
+        <!-- The Minimal API layer (ADR-0008). It carries no FrameworkReference: the ASP.NET Core
+             HTTP contracts are vendored source, so this resolves for browser-wasm like any other
+             library. Its own build/ props (imported below) is what opts this compilation into the
+             interceptor namespace the Map* generator emits into. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj" />
         <!-- The analyzer ships inside the Bootsharp.Cloudflare package; referenced separately here
              because a ProjectReference carries no analyzers/ payload. -->
         <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
@@ -65,8 +70,11 @@
         <TrimmerRootType Include="Cloudflare.Backend.Data.FreeSqlNote" />
     </ItemGroup>
 
-    <!-- A PackageReference would import this from the package's build/ folder automatically; a
-         ProjectReference carries no such payload, so the sample imports it by hand. -->
+    <!-- A PackageReference would import these from the packages' build/ folders automatically; a
+         ProjectReference carries no such payload, so the sample imports them by hand. The AspNetCore
+         props is not optional: without its InterceptorsNamespaces entry every Map* call site would
+         compile against the un-intercepted body and throw at startup. -->
     <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />
+    <Import Project="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Build/Bootsharp.Cloudflare.AspNetCore.props" />
 
 </Project>

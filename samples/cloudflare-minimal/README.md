@@ -12,22 +12,45 @@ Two jobs:
    against — ADR-0007 prices size against the lean core, not against the FreeSql demo next door in
    [`samples/cloudflare`](../cloudflare).
 
-## Measured (2026-08-14, milestone 0b)
+## Measured (2026-08-14, milestone 5)
 
 The authoritative metric is the deployable **bundle gzip** from `wrangler check startup` — wasm
 plus the JS glue — not the wasm file alone (ADR-0006 §5).
 
 | | wasm raw | wasm gzip | bundle gzip | vs. free-plan ceiling |
 | --- | --- | --- | --- | --- |
-| this sample | 1,598,716 | 638,446 | **766,914** (748.94 KiB) | 2,378,814 B of headroom |
+| this sample | 1,598,716 | 638,448 | **766,915** (748.94 KiB) | 2,378,813 B of headroom |
 | free-plan ceiling | | | 3,145,728 | enforced (API error 10027) |
-| [`samples/cloudflare`](../cloudflare) | 8,709,761 | 3,082,089 | 3,293,511 | 147,783 over — paid plan, because of FreeSql |
+| [`samples/cloudflare`](../cloudflare) | 9,710,521 | 3,425,689 | 3,650,816 | 505,088 over — paid plan, because of FreeSql |
 
-Startup: 10.7 ms active against the 400 ms budget. Boot is lazy — the isolate startup phase only
+Startup: 12.9 ms active against the 400 ms budget. Boot is lazy — the isolate startup phase only
 evaluates the JS shim; .NET is instantiated inside the first request.
 
 Reproduce with `npm run size` (`wrangler check startup`), after a publish. wasm gzip is
 `gzip -9`, which is what the bundler uses.
+
+### Milestone 5 moved this sample by nothing, on purpose
+
+`Bootsharp.Cloudflare.AspNetCore` (ADR-0008) landed in the family and this sample's bundle gzip
+is byte-for-byte where it was. That is the control working: the sample takes no reference to the
+layer, and its `Worker.Route` is still a `switch` over method and path. It is worth restating why
+that matters — the number in the row above is what every layer's cost is a delta *from*, so a
+baseline that quietly grew with each new package would make every recorded delta a lie.
+
+What the layer costs was measured by rewriting **this** sample's four endpoints as
+`app.MapGet`/`app.MapMethods` in a scratch copy, changing nothing else, and confirming the four
+responses stayed byte-identical:
+
+| | wasm raw | wasm gzip | bundle gzip |
+| --- | --- | --- | --- |
+| this sample, hand-routed | 1,598,716 | 638,448 | 766,915 (748.94 KiB) |
+| the same four routes, Minimal API | 2,530,379 | 1,010,127 | 1,147,249 (1,120.36 KiB) |
+| **the layer** | **+931,663** | **+371,679** | **+380,334 (+371.42 KiB)** |
+
+So endpoint routing, compile-time model binding, `HttpContext`, `TypedResults` and a DI container
+cost ~371 KiB of bundle — leaving ~1,998 KiB of headroom under the free ceiling for an app that
+takes all of it. Deciding whether that trade is worth it for a four-route worker is the point of
+having both samples.
 
 Milestone 0b (ADR-0002 Tier-1: awaited primitive imports, the handle category, per-invocation
 handle scopes) moved this sample by **+7,987 B of bundle gzip**, essentially all of it wasm
