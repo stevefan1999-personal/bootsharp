@@ -18,6 +18,7 @@ public interface ICloudflareEnv
     IR2Bucket BUCKET { get; }
     IQueue QUEUE { get; }
     ICounterNamespace COUNTER { get; }
+    IChatRoomNamespace CHAT { get; }
     IWorkflow WORKFLOW { get; }
     string ENVIRONMENT { get; }
 }
@@ -46,4 +47,28 @@ public interface ICounterStub
     Task<int> Increment();
     /// <summary>Typed DO SQLite transport: create/insert/count on a ticks table.</summary>
     Task<string> SqlDemo();
+}
+
+/// <summary>
+/// wrangler <c>CHAT</c> binding: TS <c>DurableObjectNamespace&lt;ChatRoomHub&gt;</c>. One instance
+/// per room name, which is why <see cref="GetByName"/> is the only accessor the sample uses.
+/// </summary>
+[JSHandle(Scope = HandleScope.Isolate)]
+public interface IChatRoomNamespace
+{
+    IChatRoomStub Get(string id);
+    IChatRoomStub GetByName(string name);
+}
+
+/// <summary>
+/// TS <c>DurableObjectStub&lt;ChatRoomHub&gt;</c>. Only <see cref="NegotiateResponse"/> is declared
+/// by <see cref="ChatRoom"/> itself: the four transport methods are inherited from
+/// <c>HubDurableObject</c> and injected into the projection by the shared rules, and the JavaScript
+/// hibernation handlers — not C# — are what call them.
+/// </summary>
+public interface IChatRoomStub
+{
+    string Id { get; }
+    string? Name { get; }
+    Task<string> NegotiateResponse(string connectionId);
 }

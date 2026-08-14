@@ -9,8 +9,14 @@ namespace Cloudflare.Minimal;
 /// until the AspNetCore layer vendors one. Until then every worker declares the record
 /// its entrypoint returns, and the runtime reads three fields off it — status, headersJson, body.
 /// </remarks>
-/// <param name="Status">HTTP status. Zero means "not mine": the module then falls back to the
-/// assets binding, or answers 404 when the worker has none.</param>
+/// <remarks>
+/// Three fields is all this worker needs. The runtime reads two more off the snapshot when they are
+/// there — <c>bodyBytes</c> for a body that is not text, and <c>passThroughToAssets</c> for a worker
+/// that declines a request in favour of its assets binding — and this one declares neither: it
+/// answers every request itself, in text. <c>Bootsharp.Cloudflare.AspNetCore</c>'s
+/// <c>HttpResponseData</c> is the record that carries all five.
+/// </remarks>
+/// <param name="Status">HTTP status code.</param>
 public sealed record WorkerResponse(int Status, string HeadersJson, string Body);
 
 /// <summary>

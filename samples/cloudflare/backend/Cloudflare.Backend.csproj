@@ -43,6 +43,10 @@
              library. Its own build/ props (imported below) is what opts this compilation into the
              interceptor namespace the Map* generator emits into. -->
         <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj" />
+        <!-- The Hub layer (ADR-0010). It brings the three real SignalR wire packages with it, so the
+             bytes on the socket are produced by Microsoft's own JsonHubProtocol and HandshakeProtocol
+             rather than by anything this repository wrote. -->
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.SignalR/Bootsharp.Cloudflare.SignalR.csproj" />
         <!-- The analyzer ships inside the Bootsharp.Cloudflare package; referenced separately here
              because a ProjectReference carries no analyzers/ payload. -->
         <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
@@ -76,5 +80,9 @@
          compile against the un-intercepted body and throw at startup. -->
     <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />
     <Import Project="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Build/Bootsharp.Cloudflare.AspNetCore.props" />
+    <!-- Copies js/signalr.mjs next to the emitted module. Without it ../worker/index.ts has nothing
+         to import the hibernation handlers from, and the DO binding resolves to a class with no
+         webSocketMessage. -->
+    <Import Project="../../../src/cs/Bootsharp.Cloudflare.SignalR/Build/Bootsharp.Cloudflare.SignalR.targets" />
 
 </Project>

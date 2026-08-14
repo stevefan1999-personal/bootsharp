@@ -9,11 +9,14 @@
     "deploy": "npm run publish:cs && npm run publish:frontend && wrangler deploy",
     "types": "wrangler types",
     "check:ts": "npm run types && tsc --noEmit -p tsconfig.json",
-    "test:generator": "dotnet test ../../src/cs/Bootsharp.Cloudflare.Generate.Test /p:MSBuildEnableWorkloadResolver=false"
+    "test:generator": "dotnet test ../../src/cs/Bootsharp.Cloudflare.Generate.Test /p:MSBuildEnableWorkloadResolver=false",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.122.0",
     "@cloudflare/workers-types": "^5.20260813.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@microsoft/signalr": "^8.0.7",
+    "ws": "^8.21.0"
   }
 }

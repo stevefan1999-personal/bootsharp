@@ -1,4 +1,4 @@
-using System.Net;
+using Bootsharp.Cloudflare.AspNetCore.Html;
 
 namespace Cloudflare.Backend.Ssr;
 
@@ -15,18 +15,30 @@ public sealed class HomeModel
     public string? Error { get; init; }
 }
 
+/// <summary>
+/// The server-rendered home page, as a compiled HTML template.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The template is a plain C# interpolated string and the method is a plain C# method — no template
+/// language, no second file, no <c>.razor</c>. What the <c>[HtmlTemplate]</c> attribute buys is that
+/// <c>Bootsharp.Cloudflare.Generate</c> reads the markup at build time, works out from the
+/// surrounding tags what each hole is (element content here, an attribute value there, a URL in an
+/// <c>href</c>) and replaces the calls to this method with straight-line writes into the writer. The
+/// page costs one pass over string literals per request and nothing else.
+/// </para>
+/// <para>
+/// What it replaces is the same markup with <c>H(…)</c> around each hole. That version was not slow,
+/// it was unsafe by default: encoding was opt-in per hole, <c>{model.Counter}</c> went out raw
+/// (correct only because it is an <c>int</c>), and nothing would have caught the first forgotten
+/// call. Here encoding is what happens unless <see cref="HtmlString"/> says otherwise, which is why
+/// the two conditional banners below build fragments rather than concatenating markup.
+/// </para>
+/// </remarks>
 public static class HomePage
 {
-    public static string Render(HomeModel model)
-    {
-        var flash = model.Flash is { Length: > 0 }
-            ? $"<p class=\"flash\">{H(model.Flash)}</p>"
-            : "";
-        var error = model.Error is { Length: > 0 }
-            ? $"<p class=\"error\">{H(model.Error)}</p>"
-            : "";
-
-        return $$"""
+    [HtmlTemplate]
+    public static void Render (HtmlWriter html, HomeModel model) => html.Write($$"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,13 +102,13 @@ public static class HomePage
     <h1>Bootsharp × Cloudflare</h1>
     <p>C# NativeAOT-LLVM WASM running as a Worker. This HTML is server-rendered by .NET on the isolate. Bindings (KV, D1, R2, Durable Objects, Queues, Workflows) are JS objects called from C# via Bootsharp <code>[Import]</code>.</p>
     <div class="meta">
-      <span class="pill">runtime {{H(model.Runtime)}}</span>
-      <span class="pill">host {{H(model.Host)}}</span>
-      <span class="pill">workers-types {{H(model.WorkersTypes)}}</span>
+      <span class="pill">runtime {{model.Runtime}}</span>
+      <span class="pill">host {{model.Host}}</span>
+      <span class="pill">workers-types {{model.WorkersTypes}}</span>
       <span class="pill">LLVM wasm</span>
       <span class="pill">ASP.NET Core Minimal API</span>
     </div>
-    {{flash}}{{error}}
+    {{Notice("flash", model.Flash)}}{{Notice("error", model.Error)}}
   </header>
   <nav>
     <a href="/">SSR home</a>
@@ -108,7 +120,7 @@ public static class HomePage
     <article>
       <h2>KV</h2>
       <p>Edge key-value. Current <code>demo</code> value:</p>
-      <pre>{{H(model.KvValue ?? "(empty)")}}</pre>
+      <pre>{{model.KvValue ?? "(empty)"}}</pre>
       <form method="post" action="/api/kv">
         <input name="key" value="demo" required/>
         <input name="value" placeholder="new value" required/>
@@ -118,7 +130,7 @@ public static class HomePage
     <article>
       <h2>D1</h2>
       <p>SQLite at the edge. Rows in <code>notes</code>:</p>
-      <pre>{{H(model.D1Rows)}}</pre>
+      <pre>{{model.D1Rows}}</pre>
       <form method="post" action="/api/d1">
         <input name="body" placeholder="note text" required/>
         <button type="submit">Insert</button>
@@ -133,7 +145,7 @@ public static class HomePage
     <article>
       <h2>R2</h2>
       <p>Object storage. Listed objects:</p>
-      <pre>{{H(model.R2Objects)}}</pre>
+      <pre>{{model.R2Objects}}</pre>
       <form method="post" action="/api/r2">
         <input name="key" value="hello.txt" required/>
         <input name="value" placeholder="object text" required/>
@@ -169,8 +181,16 @@ public static class HomePage
   <footer>Paid Workers plan · 30s CPU · 10 MB gzip · instantiate WASM once per isolate.</footer>
 </body>
 </html>
-""";
-    }
+""");
 
-    private static string H(string value) => WebUtility.HtmlEncode(value);
+    /// <summary>
+    /// One of the two conditional banners, as a fragment.
+    /// </summary>
+    /// <remarks>The composition seam a single interpolated string cannot express: a template is one
+    /// expression, so anything conditional is a fragment built beside it and interpolated as a value.
+    /// The fragment is encoded where it is built, so it is written verbatim where it is used — which
+    /// is what <see cref="HtmlString"/> means, and the only place this page trusts markup.</remarks>
+    public static HtmlString Notice (string kind, string? text) => text is { Length: > 0 }
+        ? HtmlString.From($"""<p class="{kind}">{text}</p>""")
+        : HtmlString.Empty;
 }

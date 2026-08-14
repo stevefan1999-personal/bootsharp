@@ -31,8 +31,13 @@ public sealed class SiteService(ILogger<SiteService> logger)
     /// <summary>Newest-first note rows; the three list routes and the SSR page differ only in LIMIT.</summary>
     private const string selectNotes = "SELECT id, body, created_at FROM notes ORDER BY id DESC";
 
-    public async Task<IResult> Home(string? flash, string? error) =>
-        Html(HomePage.Render(await LoadHome(flash, error)));
+    public async Task<IResult> Home(string? flash, string? error)
+    {
+        var model = await LoadHome(flash, error);
+        // The result takes the template, not its output: the writer buffers today and streams once
+        // the transport can, with no change here or in HomePage.
+        return TypedResults.Html(html => HomePage.Render(html, model));
+    }
 
     public IResult Health() => TypedResults.Ok(new HealthView(
         Ok: true,
@@ -193,12 +198,36 @@ public sealed class SiteService(ILogger<SiteService> logger)
     }
 
     /// <summary>
-    /// The post-guest fallback to the assets binding: status 0 tells <c>js/runtime.mjs</c> that this
-    /// worker declined the request, and it re-issues it against <c>ASSETS</c>.
+    /// The post-guest fallback to the assets binding: the result tells <c>js/runtime.mjs</c> that
+    /// this worker declined the request, and it re-issues it against <c>ASSETS</c>.
     /// </summary>
     /// <remarks>Rarely reached — <c>[WorkerAssets]</c> makes the JS side answer <c>/app</c> before
-    /// .NET is booted at all — but it keeps the fallback true for any prefix not declared there.</remarks>
-    public IResult Assets() => TypedResults.StatusCode(0);
+    /// .NET is booted at all — but it keeps the fallback true for any prefix not declared there.
+    /// It used to be <c>StatusCode(0)</c>, which no <c>Response</c> can carry and any handler could
+    /// have produced by accident.</remarks>
+    public IResult Assets() => TypedResults.PassThroughToAssets();
+
+    /// <summary>
+    /// A binary response: the eight bytes of a PNG signature, which is not valid UTF-8.
+    /// </summary>
+    /// <remarks>Here to prove the byte channel end to end. Returned as text
+    /// these bytes arrive as replacement characters — the silent degradation the buffered-text path
+    /// used to have — so the smoke test asserts on the bytes themselves.</remarks>
+    public IResult GetBytes() => TypedResults.Bytes(
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, "image/png", "signature.png");
+
+    /// <summary>
+    /// Two cookies and the request's own, which needs two <c>Set-Cookie</c> headers on one response.
+    /// </summary>
+    /// <remarks>The case the flat header wire shape could not carry: comma-joining them sets one
+    /// malformed cookie. <see cref="HttpResponse.Cookies"/> works because the snapshot renders a
+    /// repeated header as an array now.</remarks>
+    public IResult GetCookies(HttpContext context)
+    {
+        context.Response.Cookies.Append("session", "abc");
+        context.Response.Cookies.Append("theme", "dark", new CookieOptions { HttpOnly = true, Path = "/" });
+        return TypedResults.Ok(new CookiesView(context.Request.Cookies["session"], context.Request.Cookies.Count));
+    }
 
     /// <summary>Reads one <c>notes</c> row, or null when there is none.</summary>
     /// <remarks><c>ID1PreparedStatement.First()</c> answers with the row as a JSON object — the shape
@@ -241,9 +270,8 @@ public sealed class SiteService(ILogger<SiteService> logger)
         };
     }
 
-    // TypedResults.Content appends the charset, so these two read as one decision each rather than
-    // as a content-type literal repeated at every call site.
-    private static IResult Html(string html) => TypedResults.Content(html, "text/html");
+    // TypedResults.Content appends the charset, so this reads as one decision rather than as a
+    // content-type literal repeated at every call site.
     private static IResult JsonText(string json) => TypedResults.Content(json, "application/json");
 
     private static string Join(string? left, string right) => string.IsNullOrEmpty(left) ? right : left + "; " + right;

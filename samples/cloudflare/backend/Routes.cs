@@ -44,8 +44,13 @@ public static class Routes
         app.MapGet("/api/echo", (SiteService site, [FromQuery] string text, [FromQuery] int times = 1) =>
             site.Echo(text, times));
 
+        // The two milestone-6 transport prerequisites, kept together because each is a wire-shape
+        // change: a binary body that survives, and a response carrying two Set-Cookie headers.
+        app.MapGet("/api/bytes", (SiteService site) => site.GetBytes());
+        app.MapGet("/api/cookies", (SiteService site, HttpContext context) => site.GetCookies(context));
+
         // Catch-all: '{*rest}' spans '/' where the shim's '{rest}' matched a single segment. Both
-        // answer with the status-0 sentinel that hands the request back to the assets binding.
+        // answer with the result that hands the request back to the assets binding.
         app.MapGet("/app", (SiteService site) => site.Assets());
         app.MapGet("/app/{*rest}", (SiteService site) => site.Assets());
     }

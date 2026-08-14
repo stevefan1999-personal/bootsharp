@@ -1,9 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bootsharp-cloudflare",
-  // Emitted by `dotnet publish` (the Bootsharp.Cloudflare publish task), next to the wasm and the
-  // Bootsharp ES modules it imports. `npm run dev` and `npm run deploy` publish first.
-  "main": "dist/worker/entrypoints.ts",
+  // A hand-written module that re-exports the emitted one (`dist/worker/entrypoints.ts`, written by
+  // `dotnet publish`) and adds the two things a SignalR hub needs and the emitter cannot produce:
+  // workerd's reserved hibernation callbacks, and a 101 response carrying a live socket. See its
+  // header. A worker with no hub points `main` straight at the emitted module.
+  "main": "worker/index.ts",
   "compatibility_date": "2026-08-13",
   // Required by Bootsharp.Cloudflare, not optional: js/runtime.mjs imports AsyncLocalStorage
   // from node:async_hooks to scope handles per logical invocation. nodejs_als
@@ -54,10 +56,16 @@
     ]
   },
   "durable_objects": {
-    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }]
+    "bindings": [
+      { "name": "COUNTER", "class_name": "Counter" },
+      // The hub's room. `class_name` is the wrapper exported by worker/index.ts, not the emitted
+      // ChatRoom it subclasses — the wrapper is what carries the hibernation callbacks.
+      { "name": "CHAT", "class_name": "ChatRoomHub" }
+    ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Counter"] }
+    { "tag": "v1", "new_sqlite_classes": ["Counter"] },
+    { "tag": "v2", "new_sqlite_classes": ["ChatRoomHub"] }
   ],
   "workflows": [
     {

@@ -29,6 +29,9 @@ public sealed record NoteInput(string Body);
 /// <summary><c>GET /api/echo</c>: what the query string bound to.</summary>
 public sealed record EchoView(string Text, int Times, string Result);
 
+/// <summary>What the cookie route reports back: what arrived, so a round trip is observable.</summary>
+public sealed record CookiesView(string? Session, int Count);
+
 /// <summary>
 /// The JSON metadata this app serializes through.
 /// </summary>
@@ -54,6 +57,7 @@ public sealed record EchoView(string Text, int Times, string Result);
 [JsonSerializable(typeof(FreeSqlView))]
 [JsonSerializable(typeof(NoteInput))]
 [JsonSerializable(typeof(EchoView))]
+[JsonSerializable(typeof(CookiesView))]
 public sealed partial class ApiJsonContext : JsonSerializerContext;
 
 /// <summary>

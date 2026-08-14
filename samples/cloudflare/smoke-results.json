@@ -1,0 +1,147 @@
+[
+  {
+    "check": "home",
+    "pass": true,
+    "status": 200,
+    "contentType": "text/html; charset=utf-8",
+    "hasPill": true,
+    "encodesFlash": true
+  },
+  {
+    "check": "health",
+    "pass": true,
+    "status": 200,
+    "ok": true,
+    "runtime": ".NET 10.0.0"
+  },
+  {
+    "check": "kv",
+    "pass": true,
+    "put": 303,
+    "location": "/?flash=kv-updated",
+    "value": "kv-round-trip"
+  },
+  {
+    "check": "d1",
+    "pass": true,
+    "post": 303,
+    "found": true
+  },
+  {
+    "check": "d1Grid",
+    "pass": true,
+    "status": 200,
+    "body": "{\"columns\":[\"id\",\"body\",\"created_at\"],\"rows\":[[23,\"d1-smoke\",\"2026-08-14 09:02:5"
+  },
+  {
+    "check": "freeSql",
+    "pass": true,
+    "post": 303,
+    "found": true
+  },
+  {
+    "check": "r2",
+    "pass": true,
+    "put": 303,
+    "found": true
+  },
+  {
+    "check": "durableObject",
+    "pass": true,
+    "before": 16,
+    "after": 18
+  },
+  {
+    "check": "durableObjectSql",
+    "pass": true,
+    "status": 200,
+    "body": "{\"orm\":\"do-sql\",\"rows\":[[15]]}"
+  },
+  {
+    "check": "queue",
+    "pass": true,
+    "status": 303,
+    "location": "/?flash=queue-sent"
+  },
+  {
+    "check": "workflow",
+    "pass": true,
+    "status": 303,
+    "location": "/?flash=workflow-6ececfd1-3281-4bc5-935c-70b9e2c2f68f"
+  },
+  {
+    "check": "typedRouteParameter",
+    "pass": true,
+    "created": 201,
+    "location": "/api/notes/25",
+    "one": 200,
+    "wrongType": 404
+  },
+  {
+    "check": "jsonBody",
+    "pass": true,
+    "status": 201,
+    "malformed": 400
+  },
+  {
+    "check": "queryBinding",
+    "pass": true,
+    "result": "hi hi hi",
+    "times": 1,
+    "missing": 400
+  },
+  {
+    "check": "binaryBody",
+    "pass": true,
+    "status": 200,
+    "contentType": "image/png",
+    "bytes": [
+      137,
+      80,
+      78,
+      71,
+      13,
+      10,
+      26,
+      10
+    ]
+  },
+  {
+    "check": "repeatedSetCookie",
+    "pass": true,
+    "status": 200,
+    "cookies": [
+      "session=abc; path=/",
+      "theme=dark; path=/; httponly"
+    ],
+    "session": "incoming",
+    "count": 1
+  },
+  {
+    "check": "passThroughToAssets",
+    "pass": true,
+    "top": 200,
+    "nested": 404
+  },
+  {
+    "check": "routerNegatives",
+    "pass": true,
+    "notFound": 404,
+    "wrongMethod": 405,
+    "allow": "GET"
+  },
+  {
+    "check": "cron",
+    "pass": true,
+    "fired": 200,
+    "heartbeat": "{\"lastScheduled\":{\"cron\":\"*/15 * * * *\",\"scheduledTime\":1786698176926,\"scheduledAt\":\"2026-08-14T09:02:56.9260000+00:00\"}}"
+  },
+  {
+    "check": "chatHub",
+    "pass": true,
+    "transport": "WebSocketTransport",
+    "who": "737e88f0-4a96-495f-be85-3b45f32680fe",
+    "broadcast": 2,
+    "refused": "refused by contract"
+  }
+]
