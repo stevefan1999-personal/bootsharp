@@ -77,6 +77,41 @@ public interface IWorkflowStep
     Task<string> WaitForEvent(string name, string type);
 }
 
+/// <summary>
+/// The <see cref="IWorkflowStep"/> a workflow's <c>Run</c> is handed: the workerd handle, plus the
+/// release of the callback each <c>do</c> exports.
+/// </summary>
+/// <remarks>
+/// Passing a C# lambda to JavaScript registers it in Bootsharp's export registry, which is keyed by
+/// instance — and a fresh closure per step means a fresh entry per step, held forever. Nothing
+/// collects it: the JavaScript proxy is kept by a finalization registry, and workerd runs neither
+/// that nor a NativeAOT finalizer on any schedule an isolate can rely on. A long-running workflow
+/// therefore grew its registry by one delegate per step until the isolate died.
+/// <para>
+/// The release is safe exactly here: workerd retries a step by calling the same callback again from
+/// inside the pending <c>do</c> promise, so the callback is unreachable only once that promise has
+/// settled — which is where the release runs, on the failure path as well.
+/// </para>
+/// </remarks>
+public sealed class ReleasingWorkflowStep (IWorkflowStep step) : IWorkflowStep
+{
+    public async Task<string> Do (string name, Func<Task<string>> callback)
+    {
+        try { return await step.Do(name, callback); }
+        finally { Instances.ReleaseExported(callback); }
+    }
+
+    public async Task<string> DoWithConfig (string name, WorkflowStepConfig config, Func<Task<string>> callback)
+    {
+        try { return await step.DoWithConfig(name, config, callback); }
+        finally { Instances.ReleaseExported(callback); }
+    }
+
+    public Task Sleep (string name, string duration) => step.Sleep(name, duration);
+    public Task SleepUntil (string name, double timestampMs) => step.SleepUntil(name, timestampMs);
+    public Task<string> WaitForEvent (string name, string type) => step.WaitForEvent(name, type);
+}
+
 /// <summary>Subset of JS <c>WorkflowStepConfig</c> (static delay only, no delay function).</summary>
 public sealed record WorkflowStepConfig
 {

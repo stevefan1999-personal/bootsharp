@@ -18,8 +18,8 @@ public sealed record DurableObjectNamespaceGetOptions
 }
 
 /// <summary>
-/// JS <c>DurableObjectState</c>. WebSocket hibernation, facets, and
-/// <c>blockConcurrencyWhile</c> are omitted (callbacks / host types).
+/// JS <c>DurableObjectState</c>. Facets and <c>blockConcurrencyWhile</c> are omitted (callbacks /
+/// host types); WebSocket hibernation is projected through <see cref="Hibernation"/>.
 /// </summary>
 /// <remarks>
 /// Actor-scoped, hence exempt from per-invocation release: the emitted Durable
@@ -32,6 +32,11 @@ public interface IDurableObjectState
 {
     string Id { get; }
     IDurableObjectStorage Storage { get; }
+    /// <summary>
+    /// The hibernation WebSocket surface. Present on every Durable Object state, and
+    /// costs an app that never touches it exactly one unused property on the wrapper.
+    /// </summary>
+    IHibernation Hibernation { get; }
     void Abort(string? reason);
 }
 

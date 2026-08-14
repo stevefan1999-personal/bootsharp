@@ -57,6 +57,13 @@ public interface IJsRequest
     string HeadersJson { get; }
     string? CfJson { get; }
     Task<string> Text();
+    /// <summary>
+    /// The body as it arrived, for requests that are not text.
+    /// </summary>
+    /// <remarks>Reading a binary upload through <see cref="Text"/> replaces every byte sequence that
+    /// is not valid UTF-8, so this is the only lossless read. workerd allows the body to be read
+    /// once, so a handler takes one of the two.</remarks>
+    Task<byte[]> Bytes();
 }
 
 /// <summary>JS <c>ScheduledController</c>.</summary>

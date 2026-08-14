@@ -1,10 +1,13 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Bootsharp.Cloudflare.AspNetCore;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace Microsoft.AspNetCore.Http.HttpResults;
 
@@ -210,6 +213,65 @@ public sealed class ContentHttpResult (string? content, string? contentType, Enc
                 ? ContentType
                 : ContentType + "; charset=" + encoding.WebName;
         return ResponseContent is null ? Task.CompletedTask : httpContext.Response.WriteAsync(ResponseContent, encoding);
+    }
+}
+
+/// <summary>A response carrying bytes.</summary>
+/// <remarks>
+/// The buffered body is bytes all the way to the <c>Response</c> now (' byte
+/// channel), so this writes them straight through instead of degrading to a string. Upstream's
+/// range processing, <c>ETag</c> and <c>Last-Modified</c> handling are deliberately absent: they
+/// belong to a static-file layer, and a worker serves static files from the assets binding.
+/// </remarks>
+public sealed class FileContentHttpResult (
+    ReadOnlyMemory<byte> contents, string? contentType, string? fileDownloadName) : IResult, IStatusCodeHttpResult
+{
+    public ReadOnlyMemory<byte> FileContents { get; } = contents;
+    public string ContentType { get; } = contentType ?? "application/octet-stream";
+    public string? FileDownloadName { get; } = fileDownloadName;
+    public int StatusCode => StatusCodes.Status200OK;
+
+    public async Task ExecuteAsync (HttpContext httpContext)
+    {
+        httpContext.Response.ContentType = ContentType;
+        httpContext.Response.ContentLength = FileContents.Length;
+        if (FileDownloadName is { } name)
+            httpContext.Response.Headers.ContentDisposition = Disposition(name);
+        await httpContext.Response.Body.WriteAsync(FileContents, httpContext.RequestAborted);
+    }
+
+    // SetHttpFileName writes both the plain and the RFC 5987 filename* form, which is what makes a
+    // non-ASCII name survive; hand-formatting the header is where that goes wrong.
+    private static string Disposition (string name)
+    {
+        var disposition = new ContentDispositionHeaderValue("attachment");
+        disposition.SetHttpFileName(name);
+        return disposition.ToString();
+    }
+}
+
+/// <summary>
+/// The worker declining the request in favour of the assets binding.
+/// </summary>
+/// <remarks>
+/// Not a status code: the emitted module recognises it through a field of the response snapshot, so
+/// "this one is not mine" cannot be confused with an answer. It replaces the status-zero sentinel,
+/// which the runtime had to special-case before building a <c>Response</c> and which any handler
+/// could have produced by accident.
+/// </remarks>
+public sealed class PassThroughToAssetsHttpResult : IResult
+{
+    internal static readonly PassThroughToAssetsHttpResult Instance = new();
+    private PassThroughToAssetsHttpResult () { }
+
+    public Task ExecuteAsync (HttpContext httpContext)
+    {
+        if (httpContext.Features.Get<IHttpResponseFeature>() is not WorkerResponseFeature feature)
+            throw new InvalidOperationException(
+                "Results.PassThroughToAssets() is answered by the worker entrypoint and only works " +
+                "on a context this package created.");
+        feature.PassThroughToAssets = true;
+        return Task.CompletedTask;
     }
 }
 

@@ -27,6 +27,7 @@ public static class Instances
     private static readonly Dictionary<int, Action> onDisposeById = [];
     private static readonly Queue<int> idPool = [];
     private static int nextId = int.MinValue; // C# IDs are negative; JS's — positive; 0 reserved for null.
+    private static Action<int>? notifyReleased;
 
     /// <summary>
     /// Resolves a registered instance associated with the specified ID, or uses a factory that
@@ -79,11 +80,55 @@ public static class Instances
     /// Notifies that an exported instance with the specified ID is no longer used on the JavaScript side
     /// (eg, was garbage collected) and can be released on the C# side as well.
     /// </summary>
+    /// <remarks>
+    /// The ID is recycled only when it was still registered. An ID that <see cref="ReleaseExported"/>
+    /// already retired is deliberately never handed out again (see there), and a finalizer arriving
+    /// after the fact must not undo that.
+    /// </remarks>
     public static void DisposeExported (int id)
     {
-        if (exportedById.Remove(id, out var it)) idByExported.Remove(Key(it));
+        if (!exportedById.Remove(id, out var it)) return;
+        idByExported.Remove(Key(it));
         if (onDisposeById.Remove(id, out var onDispose)) onDispose();
         idPool.Enqueue(id);
+    }
+
+    /// <summary>
+    /// Releases an exported instance the C# side is done with, without waiting for JavaScript to
+    /// notice: untracks it here and notifies JavaScript to drop its proxy.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="ReleaseImported"/>, for the direction where C# knows the
+    /// lifetime and JavaScript cannot: a delegate handed to a host API for the duration of one call
+    /// is unreachable the moment the call returns, but nothing releases it — the JS proxy is held by
+    /// a finalization registry, and neither that nor a NativeAOT finalizer fires reliably in workerd.
+    /// Without this, every such call adds a permanent entry to the export registry
+    /// (Bootsharp.Cloudflare's workflow steps are the case that made it visible).
+    /// The ID is not recycled: unlike a disposal, a release can happen while a JavaScript proxy for
+    /// it is still alive, and reusing the ID would let that proxy resolve another instance.
+    /// </remarks>
+    /// <param name="it">The instance passed to <see cref="Export"/> earlier.</param>
+    /// <returns>Whether the instance was registered and is now released.</returns>
+    public static bool ReleaseExported (object it)
+    {
+        if (!idByExported.Remove(it, out var id)) return false;
+        exportedById.Remove(id);
+        if (onDisposeById.Remove(id, out var onDispose)) onDispose();
+        notifyReleased?.Invoke(id);
+        return true;
+    }
+
+    /// <summary>
+    /// Registers the callback notifying JavaScript that an exported instance was released.
+    /// </summary>
+    /// <remarks>
+    /// Assigned by the generated interop at module initialization: the notification is a JSImport,
+    /// which can only be declared in the generated code, while <see cref="ReleaseExported"/> is
+    /// called from libraries that know nothing of a particular app's generated types.
+    /// </remarks>
+    public static void RegisterReleaseNotifier (Action<int> notify)
+    {
+        notifyReleased = notify;
     }
 
     /// <summary>

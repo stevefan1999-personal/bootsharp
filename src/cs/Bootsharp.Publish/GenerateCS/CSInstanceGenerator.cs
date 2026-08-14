@@ -38,12 +38,14 @@ internal sealed class CSInstanceGenerator
               [ModuleInitializer]
               internal static void RegisterExports ()
               {
+                  Bootsharp.Instances.RegisterReleaseNotifier(NotifyExportedReleased);
                   {{Fmt(its.Where(i => i.Exporter != null).Select(EmitExporter), 2)}}
               }
 
               [JSExport] private static void DisposeExported (int id) => Bootsharp.Instances.DisposeExported(id);
               [JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);
               [JSImport("instances.disposeImported", "Bootsharp")] private static partial void NotifyImportedDisposed (int id);
+              [JSImport("instances.releaseExported", "Bootsharp")] private static partial void NotifyExportedReleased (int id);
           }
 
           {{Fmt(its.Where(i => i.IK == InteropKind.Import).Select(EmitProxy), 0, "\n\n")}}

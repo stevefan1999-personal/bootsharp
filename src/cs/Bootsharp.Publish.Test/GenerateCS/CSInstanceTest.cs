@@ -482,4 +482,26 @@ public class CSInstanceTest : GenerateCSTest
         Contains("if (Bootsharp.Instances.DisposeImported(id, proxy)) NotifyImportedDisposed(id);");
         Contains("[JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);");
     }
+
+    /// <summary>
+    /// The reverse direction of the same concern: an export the C# side releases (a callback handed
+    /// to a host API for one call) has to reach the JavaScript registry, and the JSImport carrying
+    /// that notification can only be declared here.
+    /// </summary>
+    [Fact]
+    public void ExportReleaseIsNotifiedToJavaScript ()
+    {
+        AddAssembly(With(
+            """
+            public interface IExported;
+
+            public class Class
+            {
+                [Import] public static IExported GetExported () => default!;
+            }
+            """));
+        Execute();
+        Contains("Bootsharp.Instances.RegisterReleaseNotifier(NotifyExportedReleased);");
+        Contains("[JSImport(\"instances.releaseExported\", \"Bootsharp\")] private static partial void NotifyExportedReleased (int id);");
+    }
 }

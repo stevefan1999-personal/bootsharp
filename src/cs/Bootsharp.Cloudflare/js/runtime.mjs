@@ -457,11 +457,79 @@ function wrapSyncKv (kv) {
   };
 }
 
+// Hibernation sockets are addressed by connection id, which the accepting side sets as the
+// socket's first `acceptWebSocket` tag. Tags are immutable after accept, which is what makes them
+// a safe identity and an unsafe group membership — the mutable half lives in the attachment.
+// `getWebSockets(tag)` is the O(1) lookup workerd gives us for exactly this.
+function socketBy (ctx, connectionId) {
+  return ctx.getWebSockets(connectionId)[0] ?? null;
+}
+
+function connectionIdOf (ctx, ws) {
+  return ctx.getTags(ws)[0] ?? "";
+}
+
+// The attachment crosses as text: it is C#-owned state (groups, user, handshake flag) and the host
+// has no business parsing it. `serializeAttachment` would accept the object, but round-tripping a
+// structured clone through the marshaler buys nothing a string does not.
+function attachmentOf (ws) {
+  const value = ws.deserializeAttachment();
+  return value == null ? null : String(value);
+}
+
+// Every member is synchronous, and every caller depends on that: workerd releases the actor input
+// gate at any await that is not Durable Object storage, so a lifetime manager that awaited between
+// reading the socket set and writing an attachment would race a second webSocketMessage event
+// (measured — src/js/test/do-interleave). See IHibernation's remarks.
+function wrapHibernation (ctx) {
+  return {
+    sockets: () => ctx.getWebSockets().map((ws) => ({
+      connectionId: connectionIdOf(ctx, ws),
+      attachment: attachmentOf(ws),
+      autoRespondedAt: +(ctx.getWebSocketAutoResponseTimestamp(ws) ?? 0),
+      open: ws.readyState === WebSocket.READY_STATE_OPEN,
+    })),
+    attachment: (connectionId) => {
+      const ws = socketBy(ctx, connectionId);
+      return ws == null ? null : attachmentOf(ws);
+    },
+    attach: (connectionId, attachment) => {
+      // A socket can close between any two statements of a hub method's continuation. Dropping the
+      // write is the only correct outcome: there is nothing left to attach it to.
+      socketBy(ctx, connectionId)?.serializeAttachment(attachment);
+    },
+    send: (connectionId, message) => {
+      const ws = socketBy(ctx, connectionId);
+      if (ws == null) return false;
+      // One call is one whole text frame. The SignalR JS client has no partial-frame buffer, so a
+      // chunked message is a protocol error on the client rather than a slow path.
+      ws.send(message);
+      return true;
+    },
+    close: (connectionId, code, reason) => {
+      const ws = socketBy(ctx, connectionId);
+      if (ws == null) return false;
+      // close() is idempotent on an already-closing socket, which is what lets the alarm sweep be
+      // read-only plus close rather than a queued write.
+      try { ws.close(code, reason ?? undefined); } catch { return false; }
+      return true;
+    },
+    autoRespond: (request, response) =>
+      ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(request, response)),
+    autoRespondedAt: (connectionId) => {
+      const ws = socketBy(ctx, connectionId);
+      return ws == null ? 0 : +(ctx.getWebSocketAutoResponseTimestamp(ws) ?? 0);
+    },
+    setEventTimeout: (milliseconds) => ctx.setHibernatableWebSocketEventTimeout(milliseconds),
+  };
+}
+
 export function wrapState (ctx) {
   const sql = ctx.storage.sql;
   return {
     id: String(ctx.id),
     abort: (reason) => ctx.abort(reason ?? undefined),
+    hibernation: wrapHibernation(ctx),
     storage: {
       get: async (key) => { const value = await ctx.storage.get(key); return value == null ? null : String(value); },
       put: (key, value) => ctx.storage.put(key, value),
@@ -534,13 +602,33 @@ export function wrapRequest (request) {
     headersJson: JSON.stringify(headers),
     cfJson: cf ? JSON.stringify(cf) : null,
     text: () => request.text(),
+    // The body as it arrived. Reading it as text and re-encoding on the guest side turns every
+    // byte sequence that is not valid UTF-8 into replacement characters, so an upload only survives
+    // this way; the guest picks one of the two per request and workerd allows exactly one read.
+    bytes: async () => new Uint8Array(await request.arrayBuffer()),
   };
 }
 
+// Header values cross as a string, or as an array where one name carries several headers. Only
+// `append` can express the latter, and only `Set-Cookie` needs it — workerd's own `Headers` cannot
+// be constructed from an object with repeats at all, which is why the wire shape is not one.
+function toHeaders (headersJson) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(JSON.parse(headersJson || "{}"))) {
+    if (Array.isArray(value)) for (const item of value) headers.append(name, item);
+    else if (value != null) headers.set(name, value);
+  }
+  return headers;
+}
+
 export function toResponse (result) {
-  if (result.status === 0) return null;
-  const headers = JSON.parse(result.headersJson || "{}");
-  return new Response(result.body, { status: result.status, headers });
+  // Declining is a field of its own: a status is always a real answer, and the zero this replaces
+  // was both indistinguishable from an unset snapshot and illegal in a Response.
+  if (result.passThroughToAssets) return null;
+  // Bytes when the guest sent bytes — the layer's own snapshot always does, so text is only the
+  // path a hand-written entrypoint takes.
+  const body = result.bodyBytes ?? result.body;
+  return new Response(body, { status: result.status, headers: toHeaders(result.headersJson) });
 }
 
 // Fast path that answers static assets without paying for a.NET boot. The prefixes come from the

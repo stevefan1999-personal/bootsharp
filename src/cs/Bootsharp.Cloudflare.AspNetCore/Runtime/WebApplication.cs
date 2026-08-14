@@ -154,7 +154,8 @@ public sealed class WebApplication : IApplicationBuilder, IEndpointRouteBuilder
         try
         {
             var method = request.Method;
-            var body = WorkerHttpContext.CanHaveBody(method) ? await request.Text() : string.Empty;
+            // Bytes, not text: the body is read once and a binary upload has to survive it.
+            var body = WorkerHttpContext.CanHaveBody(method) ? await request.Bytes() : [];
             context = new WorkerHttpContext(method, request.Url, request.HeadersJson, body, scope.ServiceProvider);
             await handle(context);
             return await context.SnapshotAsync();

@@ -36,17 +36,21 @@ public sealed class WorkerHttpContext : HttpContext, IDisposable
     private readonly WorkerHttpResponse response;
     private bool disposed;
 
-    // Request, response, response body, body detection, and the six state slots — the practical
-    // minimum identifies, with no room reserved for features nothing sets.
-    private const int featuresCapacity = 11;
+    // Request, response, response body, body detection, the two cookie slots and the six state
+    // slots — the practical minimum identifies, with no room reserved for features
+    // nothing sets.
+    private const int featuresCapacity = 13;
 
     /// <summary>Builds a context from the snapshot taken off the live workerd request.</summary>
     /// <param name="method">HTTP method, e.g. <c>GET</c>.</param>
     /// <param name="url">Absolute request URL as workerd reports it.</param>
-    /// <param name="headersJson">Request headers as a flat JSON object.</param>
+    /// <param name="headersJson">Request headers as a JSON object.</param>
     /// <param name="body">Request body, already buffered. Empty for bodyless methods.</param>
     /// <param name="services">The request's service scope.</param>
-    public WorkerHttpContext (string method, string url, string? headersJson, string body, IServiceProvider services)
+    /// <remarks>The body arrives as bytes rather than as text because that is what it is: decoding
+    /// it here would corrupt every upload that is not UTF-8, and a handler binding JSON reads the
+    /// same stream either way.</remarks>
+    public WorkerHttpContext (string method, string url, string? headersJson, byte[] body, IServiceProvider services)
     {
         var uri = new Uri(url, UriKind.Absolute);
         requestFeature.Method = method;
@@ -55,7 +59,7 @@ public sealed class WorkerHttpContext : HttpContext, IDisposable
         requestFeature.QueryString = uri.Query;
         requestFeature.RawTarget = uri.PathAndQuery;
         requestFeature.Headers = HeaderJson.Parse(headersJson);
-        requestFeature.Body = body.Length == 0 ? Stream.Null : new MemoryStream(Encoding.UTF8.GetBytes(body), writable: false);
+        requestFeature.Body = body.Length == 0 ? Stream.Null : new MemoryStream(body, writable: false);
         requestFeature.CanHaveBody = CanHaveBody(method);
         stateFeature.RequestServices = services;
         stateFeature.TraceIdentifier = TraceIdentifierOf(requestFeature.Headers);
@@ -64,6 +68,8 @@ public sealed class WorkerHttpContext : HttpContext, IDisposable
         features.Set<IHttpRequestBodyDetectionFeature>(requestFeature);
         features.Set<IHttpResponseFeature>(responseFeature);
         features.Set<IHttpResponseBodyFeature>(responseFeature);
+        features.Set<IRequestCookiesFeature>(requestFeature);
+        features.Set<IResponseCookiesFeature>(responseFeature);
         features.Set<IItemsFeature>(stateFeature);
         features.Set<IQueryFeature>(stateFeature);
         features.Set<IRouteValuesFeature>(stateFeature);
@@ -212,16 +218,7 @@ internal sealed class WorkerHttpRequest (
         set => feature.Headers.ContentType = value;
     }
 
-    /// <summary>Not available in this package.</summary>
-    /// <remarks>Cookie parsing is cheap but only useful with the response half, which needs the
-    /// JS side to accept repeated <c>Set-Cookie</c> headers; both land together or not at all.</remarks>
-    public override IRequestCookieCollection Cookies
-    {
-        get => throw new PlatformNotSupportedException(
-            "HttpRequest.Cookies is not implemented yet: representing repeated Set-Cookie headers " +
-            "needs a change on the JavaScript side of the response snapshot. Read the Cookie header directly.");
-        set => throw new PlatformNotSupportedException("HttpRequest.Cookies is not implemented yet.");
-    }
+    public override IRequestCookieCollection Cookies { get => feature.Cookies; set => feature.Cookies = value; }
 
     /// <summary>Always false: form parsing is the <c>.Forms</c> layer's job.</summary>
     public override bool HasFormContentType => false;
@@ -266,10 +263,7 @@ internal sealed class WorkerHttpResponse (WorkerHttpContext context, WorkerRespo
         set => feature.Headers.ContentType = value;
     }
 
-    /// <summary>Not available in this package — see <see cref="WorkerHttpRequest.Cookies"/>.</summary>
-    public override IResponseCookies Cookies => throw new PlatformNotSupportedException(
-        "HttpResponse.Cookies is not implemented yet: representing repeated Set-Cookie headers needs " +
-        "a change on the JavaScript side of the response snapshot. Set the Set-Cookie header directly.");
+    public override IResponseCookies Cookies => feature.Cookies;
 
     /// <inheritdoc cref="WorkerResponseFeature.StartAsync"/>
     public override Task StartAsync (CancellationToken cancellationToken = default) => feature.StartAsync(cancellationToken);

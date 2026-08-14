@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
+using Bootsharp.Cloudflare.AspNetCore.Html;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,8 +24,9 @@ namespace Microsoft.AspNetCore.Http;
 /// <item><c>CreatedAtRoute</c>, <c>AcceptedAtRoute</c>, <c>RedirectToRoute</c> — no
 /// <c>LinkGenerator</c>. Build the URL and use <see cref="Created(string?)"/> or
 /// <see cref="Redirect"/>.</item>
-/// <item><c>File</c>, <c>PhysicalFile</c>, <c>VirtualFile</c> — a worker has no filesystem. Serve
-/// static content from the assets binding.</item>
+/// <item><c>PhysicalFile</c>, <c>VirtualFile</c>, and the path-taking <c>File</c> overloads — a
+/// worker has no filesystem. <see cref="File(ReadOnlyMemory{byte}, string?, string?)"/> takes the
+/// bytes; static content is served from the assets binding.</item>
 /// <item><c>Challenge</c>, <c>Forbid</c>, <c>SignIn</c>, <c>SignOut</c> — no authentication layer yet.</item>
 /// <item>The untyped, reflective <c>Results.Json(object)</c> — <c>[RequiresDynamicCode]</c>.
 /// Use <see cref="Json{T}(T, JsonTypeInfo{T}, string?, int?)"/>.</item>
@@ -90,6 +92,17 @@ public static class TypedResults
     public static JsonHttpResult<TValue> Json<TValue> (TValue? value, JsonTypeInfo<TValue> jsonTypeInfo, string? contentType = null, int? statusCode = null) =>
         new(value, jsonTypeInfo, contentType, statusCode);
 
+    /// <summary>A <c>text/html</c> response rendered by a template.</summary>
+    /// <remarks>Beyond upstream's surface — <c>Results.Content(html, "text/html")</c> is what ASP.NET
+    /// Core offers, and it takes a string that something already built. Taking the template instead
+    /// is what lets the response stream when the transport can, and what makes the encoding of every
+    /// value in the page the writer's decision rather than the author's.</remarks>
+    public static HtmlHttpResult Html (HtmlBody body, int? statusCode = null) => new(body, statusCode);
+
+    /// <summary>A <c>text/html</c> response carrying an already-rendered fragment.</summary>
+    public static HtmlHttpResult Html (HtmlString html, int? statusCode = null) =>
+        new(writer => writer.WriteHtml(html), statusCode);
+
     /// <summary>A redirect to <paramref name="url"/>.</summary>
     public static RedirectHttpResult Redirect (string url, bool permanent = false, bool preserveMethod = false) =>
         new(url, permanent, preserveMethod);
@@ -120,12 +133,32 @@ public static class TypedResults
     public static ValidationProblem ValidationProblem (IDictionary<string, string[]> errors, string? detail = null, string? instance = null, string? title = null, string? type = null) =>
         new(errors, detail, instance, title, type);
 
+    /// <summary>A response carrying bytes.</summary>
+    /// <remarks>The buffered body is a byte channel end to end, so binary content is byte-exact
+    /// rather than mangled by a UTF-8 round trip — which is what returning it through
+    /// <see cref="Content(string?, string?, Encoding?, int?)"/> used to do.</remarks>
+    public static FileContentHttpResult Bytes (ReadOnlyMemory<byte> contents, string? contentType = null, string? fileDownloadName = null) =>
+        new(contents, contentType, fileDownloadName);
+
+    /// <summary>A file response built from bytes the handler already has.</summary>
+    /// <remarks>The one <c>File</c> overload that exists here: the path-based ones need a
+    /// filesystem, which a worker has no equivalent of. Read the bytes from R2, KV or the assets
+    /// binding and hand them over.</remarks>
+    public static FileContentHttpResult File (ReadOnlyMemory<byte> fileContents, string? contentType = null, string? fileDownloadName = null) =>
+        new(fileContents, contentType, fileDownloadName);
+
+    /// <summary>Declines the request, handing it to the worker's assets binding.</summary>
+    /// <remarks>The answer for a route the worker matches but does not serve — a client-side
+    /// application's catch-all, typically. The emitted module recognises it from the response
+    /// snapshot and calls the assets binding; a worker that has none answers 404.</remarks>
+    public static PassThroughToAssetsHttpResult PassThroughToAssets () => PassThroughToAssetsHttpResult.Instance;
+
     /// <summary>Not available until milestone 0b.</summary>
     /// <exception cref="PlatformNotSupportedException">Always.</exception>
     public static IResult Stream (System.IO.Stream stream, string? contentType = null) =>
         throw new PlatformNotSupportedException(
             "TypedResults.Stream needs a live JS ReadableStream handle; until " +
-            "then bodies are buffered. Read the stream and return TypedResults.Content.");
+            "then bodies are buffered. Read the stream and return TypedResults.Bytes.");
 
     /// <summary>Not available until milestone 0b.</summary>
     /// <exception cref="PlatformNotSupportedException">Always.</exception>
@@ -196,6 +229,23 @@ public static class Results
     /// <inheritdoc cref="TypedResults.Json{TValue}(TValue, JsonTypeInfo{TValue}, string?, int?)"/>
     public static IResult Json<TValue> (TValue? value, JsonTypeInfo<TValue> jsonTypeInfo, string? contentType = null, int? statusCode = null) =>
         TypedResults.Json(value, jsonTypeInfo, contentType, statusCode);
+
+    /// <inheritdoc cref="TypedResults.Html(HtmlBody, int?)"/>
+    public static IResult Html (HtmlBody body, int? statusCode = null) => TypedResults.Html(body, statusCode);
+
+    /// <inheritdoc cref="TypedResults.Html(HtmlString, int?)"/>
+    public static IResult Html (HtmlString html, int? statusCode = null) => TypedResults.Html(html, statusCode);
+
+    /// <inheritdoc cref="TypedResults.Bytes(ReadOnlyMemory{byte}, string?, string?)"/>
+    public static IResult Bytes (ReadOnlyMemory<byte> contents, string? contentType = null, string? fileDownloadName = null) =>
+        TypedResults.Bytes(contents, contentType, fileDownloadName);
+
+    /// <inheritdoc cref="TypedResults.File(ReadOnlyMemory{byte}, string?, string?)"/>
+    public static IResult File (ReadOnlyMemory<byte> fileContents, string? contentType = null, string? fileDownloadName = null) =>
+        TypedResults.File(fileContents, contentType, fileDownloadName);
+
+    /// <inheritdoc cref="TypedResults.PassThroughToAssets()"/>
+    public static IResult PassThroughToAssets () => TypedResults.PassThroughToAssets();
 
     /// <inheritdoc cref="TypedResults.Redirect(string, bool, bool)"/>
     public static IResult Redirect (string url, bool permanent = false, bool preserveMethod = false) =>

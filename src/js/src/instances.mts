@@ -23,8 +23,18 @@ export const instances = {
         if (exported != null) return exported;
         const proxy = new factory(id);
         exportedById.set(id, new WeakRef(proxy));
-        exportedFinalizer.register(proxy, id);
+        exportedFinalizer.register(proxy, id, proxy);
         return proxy;
+    },
+    /** Invoked from C# to notify that the exported (C# -> JS) instance was released there and its
+     *  proxy can be dropped here. Unlike the finalization path, this is deterministic: it runs when
+     *  C# knows the instance is done with — a callback passed to a host API for one call, which is
+     *  unreachable the moment that call returns.
+     *  @param id Unique identifier of the released instance. */
+    releaseExported(id: number): void {
+        const proxy = exportedById.get(id)?.deref();
+        if (proxy != null) exportedFinalizer.unregister(proxy);
+        exportedById.delete(id);
     },
     /** Registers specified imported (JS) instance and returns the associated unique ID.
      *  Short-circuits already registered imported and exported instances. */

@@ -29,8 +29,10 @@ internal static class Streaming
 /// there is nothing to pool and the feature is a plain property bag ( verdict:
 /// REIMPLEMENT the Default* trio.
 /// </remarks>
-internal sealed class WorkerRequestFeature : IHttpRequestFeature, IHttpRequestBodyDetectionFeature
+internal sealed class WorkerRequestFeature : IHttpRequestFeature, IHttpRequestBodyDetectionFeature, IRequestCookiesFeature
 {
+    private IRequestCookieCollection? cookies;
+
     public string Protocol { get; set; } = "HTTP/1.1";
     public string Scheme { get; set; } = "https";
     public string Method { get; set; } = HttpMethods.Get;
@@ -47,6 +49,15 @@ internal sealed class WorkerRequestFeature : IHttpRequestFeature, IHttpRequestBo
     /// features rather than an optional one.
     /// </summary>
     public bool CanHaveBody { get; set; }
+
+    /// <summary>The request's cookies, parsed on first read.</summary>
+    /// <remarks>Lazy because most requests to a worker carry none and every one of them would
+    /// otherwise pay the parse.</remarks>
+    public IRequestCookieCollection Cookies
+    {
+        get => cookies ??= RequestCookies.Parse(Headers);
+        set => cookies = value;
+    }
 }
 
 /// <summary>
@@ -59,17 +70,27 @@ internal sealed class WorkerRequestFeature : IHttpRequestFeature, IHttpRequestBo
 /// registration order — the ordering ASP.NET Core promises — and makes every member whose contract
 /// is "commit the response now and keep writing" unimplementable rather than merely unimplemented.
 /// </remarks>
-internal sealed class WorkerResponseFeature : IHttpResponseFeature, IHttpResponseBodyFeature
+internal sealed class WorkerResponseFeature : IHttpResponseFeature, IHttpResponseBodyFeature, IResponseCookiesFeature
 {
     private readonly MemoryStream buffer = new();
     private List<(Func<object, Task> Callback, object State)>? starting;
     private List<(Func<object, Task> Callback, object State)>? completed;
     private PipeWriter? writer;
+    private IResponseCookies? cookies;
 
     public int StatusCode { get; set; } = StatusCodes.Status200OK;
     public string? ReasonPhrase { get; set; }
     public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
     public bool HasStarted { get; private set; }
+
+    /// <summary>
+    /// Whether the worker declines the request, leaving it to the assets binding.
+    /// </summary>
+    /// <remarks>Set by <see cref="PassThroughToAssetsHttpResult"/> and read into the snapshot. It is
+    /// a flag rather than a reserved status code because every status code is a real answer: the
+    /// zero this replaces could not be told apart from an uninitialised response, and would have
+    /// thrown had the JavaScript side ever tried to build a <c>Response</c> from it.</remarks>
+    internal bool PassThroughToAssets { get; set; }
 
     public Stream Body
     {
@@ -78,6 +99,9 @@ internal sealed class WorkerResponseFeature : IHttpResponseFeature, IHttpRespons
     }
 
     Stream IHttpResponseBodyFeature.Stream => buffer;
+
+    /// <summary>The <c>Set-Cookie</c> headers this response writes.</summary>
+    public IResponseCookies Cookies => cookies ??= new ResponseCookies(Headers);
 
     // Buffered, so a PipeWriter over the same MemoryStream is exact rather than a stand-in: the
     // vendored WriteAsync extensions go through BodyWriter for larger payloads.
@@ -111,8 +135,8 @@ internal sealed class WorkerResponseFeature : IHttpResponseFeature, IHttpRespons
 
     public Task SendFileAsync (string path, long offset, long? count, CancellationToken cancellationToken = default) =>
         throw new PlatformNotSupportedException(
-            "File results are not supported on Cloudflare Workers: a worker has no filesystem. " +
-            "Serve static content from the assets binding, or return the bytes with TypedResults.Content.");
+            "Sending a file by path is not supported on Cloudflare Workers: a worker has no filesystem. " +
+            "Serve static content from the assets binding, or return the bytes with TypedResults.File.");
 
     /// <summary>Completes without doing anything — see <see cref="StartAsync"/>.</summary>
     public Task CompleteAsync () => Task.CompletedTask;
@@ -128,15 +152,22 @@ internal sealed class WorkerResponseFeature : IHttpResponseFeature, IHttpRespons
                 await callback(state);
         HasStarted = true;
         if (writer is not null) await writer.FlushAsync();
-        var snapshot = new HttpResponseData(StatusCode, HeaderJson.Render(Headers), ReadBody());
+        var snapshot = new HttpResponseData(
+            StatusCode, HeaderJson.Render(Headers), string.Empty, ReadBody(), PassThroughToAssets);
         if (completed is { } completedCallbacks)
             for (var index = completedCallbacks.Count - 1; index >= 0; index--)
                 await completedCallbacks[index].Callback(completedCallbacks[index].State);
         return snapshot;
     }
 
-    private string ReadBody () =>
-        buffer.Length == 0 ? string.Empty : System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    /// <summary>
+    /// The body as bytes, or null when the handler wrote nothing.
+    /// </summary>
+    /// <remarks>Always bytes, never the text field beside it: what a handler wrote into the buffer
+    /// is bytes already, so decoding it to a string would be a re-encoding round trip that costs an
+    /// allocation and silently mangles anything that is not valid UTF-8 — which is every image,
+    /// every protobuf, every gzip body a worker might answer with.</remarks>
+    private byte[]? ReadBody () => buffer.Length == 0 ? null : buffer.ToArray();
 }
 
 /// <summary>Per-request feature slots that are plain storage.</summary>

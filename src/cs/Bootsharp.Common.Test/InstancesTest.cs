@@ -109,6 +109,67 @@ public class InstancesTest
         Assert.True(disposed);
     }
 
+    /// <summary>
+    /// The registry leak behind a workflow step: a fresh callback per call is exported under a fresh
+    /// ID and nothing on the JavaScript side ever notifies its disposal, so the C# side has to be
+    /// able to let go of it itself.
+    /// </summary>
+    [Fact]
+    public void ReleasingExportedUntracksTheInstance ()
+    {
+        var exported = new object();
+        var id = Export(exported);
+        Assert.True(ReleaseExported(exported));
+        Assert.Throws<KeyNotFoundException>(() => Exported<object>(id));
+        Assert.NotEqual(id, Export(exported));
+    }
+
+    /// <summary>A released ID is retired: recycling it would let a JavaScript proxy that outlived
+    /// the release resolve whatever instance took the ID next.</summary>
+    [Fact]
+    public void ReleasedIdsAreNotRecycled ()
+    {
+        var released = new object();
+        var releasedId = Export(released);
+        ReleaseExported(released);
+        // Disposing after a release must not put the retired ID back into circulation either.
+        DisposeExported(releasedId);
+        Assert.NotEqual(releasedId, Export(new object()));
+    }
+
+    [Fact]
+    public void ReleasingUnregisteredInstancesIsIgnored ()
+    {
+        var exported = new object();
+        Assert.False(ReleaseExported(exported));
+        var id = Export(exported);
+        Assert.True(ReleaseExported(exported));
+        Assert.False(ReleaseExported(exported));
+        Assert.NotEqual(id, Export(exported));
+    }
+
+    [Fact]
+    public void NotifiesJavaScriptOfReleasedExports ()
+    {
+        var released = new List<int>();
+        RegisterReleaseNotifier(released.Add);
+        var exported = new object();
+        var id = Export(exported);
+        ReleaseExported(exported);
+        Assert.Equal([id], released);
+    }
+
+    [Fact]
+    public void InvokesDisposeCallbackOnRelease ()
+    {
+        var disposed = false;
+        RegisterExport(typeof(Bar), null, (_, _) => () => disposed = true);
+        var exported = new Bar();
+        Export(exported);
+        ReleaseExported(exported);
+        Assert.True(disposed);
+    }
+
     [Fact]
     public void CanImportAndDisposeInstance ()
     {
