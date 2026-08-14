@@ -5,6 +5,9 @@ namespace Bootsharp.Cloudflare;
 /// wrangler-bind. Add <c>[assembly: Import]</c> and a JS adapter when you use them.
 /// <c>connect()</c> / streams / <c>Response</c> stay on the JS host.
 /// </summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IAnalyticsEngineDataset
 {
     void WriteDataPoint(AnalyticsEngineDataPoint? point);
@@ -19,6 +22,9 @@ public sealed record AnalyticsEngineDataPoint
 }
 
 /// <summary>JS <c>RateLimit</c>.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IRateLimit
 {
     Task<RateLimitOutcome> Limit(RateLimitOptions options);
@@ -31,6 +37,9 @@ public sealed record RateLimitOptions(string Key);
 public sealed record RateLimitOutcome(bool Success);
 
 /// <summary>JS <c>Hyperdrive</c> connection fields. <c>connect()</c> (Socket) omitted.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IHyperdrive
 {
     string ConnectionString { get; }
@@ -43,12 +52,18 @@ public interface IHyperdrive
 }
 
 /// <summary>JS <c>SecretsStoreSecret</c>.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ISecretsStoreSecret
 {
     Task<string> Get();
 }
 
 /// <summary>JS <c>Vectorize</c> (RC). Vector payloads are JSON (nested maps).</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IVectorize
 {
     Task<string> Describe();
@@ -69,6 +84,9 @@ public sealed record VectorizeQueryOptions
 }
 
 /// <summary>JS <c>Ai.run</c> flattened: model name + JSON inputs → JSON outputs.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IAi
 {
     Task<string> Run(string model, string inputsJson);
@@ -76,6 +94,9 @@ public interface IAi
 }
 
 /// <summary>JS <c>DispatchNamespace.get</c> — service stub without <c>Request</c>/<c>Response</c>.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IDispatchNamespace
 {
     IServiceStub Get(string name, string? argsJson);
@@ -88,6 +109,9 @@ public interface IServiceStub
 }
 
 /// <summary>JS <c>SendEmail.send</c> (MIME builder / raw stream omitted).</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ISendEmail
 {
     Task<EmailSendResult> Send(EmailEnvelope message);
@@ -100,12 +124,18 @@ public sealed record EmailEnvelope(string From, string To);
 public sealed record EmailSendResult(string MessageId);
 
 /// <summary>JS <c>WebSearch.search</c> — options/response as JSON.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IWebSearch
 {
     Task<string> Search(string optionsJson);
 }
 
 /// <summary>JS <c>Flagship.get</c> flattened to string values.</summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IFlagship
 {
     Task<string> Get(string flagKey, string? defaultValue, string? contextJson);

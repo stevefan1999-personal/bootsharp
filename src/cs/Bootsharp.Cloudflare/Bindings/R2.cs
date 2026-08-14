@@ -4,6 +4,9 @@ namespace Bootsharp.Cloudflare;
 /// JS <c>R2Bucket</c>. Values are strings (no ReadableStream / ArrayBuffer / Blob).
 /// Multipart upload APIs omitted (part bodies are streams).
 /// </summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IR2Bucket
 {
     Task<R2ObjectInfo?> Head(string key);

@@ -4,6 +4,9 @@ namespace Bootsharp.Cloudflare;
 /// JS <c>Workflow</c> binding (<c>env.WORKFLOW</c>). <c>createBatch</c> omitted
 /// (array of instance handles).
 /// </summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IWorkflow
 {
     Task<IWorkflowInstance> Create(WorkflowInstanceCreateOptions? options);

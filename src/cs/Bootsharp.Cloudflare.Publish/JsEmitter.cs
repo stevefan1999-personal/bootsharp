@@ -102,6 +102,13 @@ internal static class JsEmitter
     /// workerd hands out the same <c>env</c> object for the lifetime of an isolate, so the handle
     /// graph is built once instead of per request — the dominant handle leak.
     /// </summary>
+    /// <remarks>
+    /// The wrapper is the one isolate-lived object with no C# handle type to annotate: the env
+    /// interface belongs to the app, so the library cannot put
+    /// <c>[JSHandle(Scope = Isolate)]</c> on it and exempts the object imperatively instead.
+    /// Without this the wrapper would be imported inside the first request's scope and released
+    /// with it, leaving every later request resolving a dead id.
+    /// </remarks>
     private static string EmitWrapEnv (IReadOnlyList<EnvProperty> env, IReadOnlyList<Entrypoint> durable)
     {
         var b = new StringBuilder();
@@ -115,6 +122,7 @@ internal static class JsEmitter
         foreach (var p in env)
             b.AppendLine($"    {p.Name}: {Wrap(p, durable)},");
         b.AppendLine("  };");
+        b.AppendLine("  exemptHandle(wrapped);");
         b.AppendLine("  wrappedEnvs.set(env, wrapped);");
         b.AppendLine("  return wrapped;");
         b.AppendLine("}");
@@ -154,10 +162,11 @@ internal static class JsEmitter
             b.AppendLine("  const wrap = Object.create(null);");
             b.AppendLine("  wrap.id = String(stub.id);");
             b.AppendLine("  wrap.name = stub.name ?? null;");
+            // Every RPC result is passed through as workerd hands it over — a JsRpcPromise for an
+            // async method. Normalising it here is no longer needed: the generated import awaits
+            // every async member, so a thenable resolves before it reaches a marshaler.
             foreach (var m in Rpc(d))
-                b.AppendLine(m.Return is "int" or "rpcInt"
-                    ? $"  wrap.{m.JsName} = (...args) => rpcNumber(stub[{Quote(m.JsName)}](...args), {Quote(m.JsName)});"
-                    : $"  wrap.{m.JsName} = (...args) => stub[{Quote(m.JsName)}](...args);");
+                b.AppendLine($"  wrap.{m.JsName} = (...args) => stub[{Quote(m.JsName)}](...args);");
             b.AppendLine("  return wrap;");
             b.AppendLine("}");
         }

@@ -1,12 +1,6 @@
 namespace Bootsharp.Cloudflare;
 
 /// <summary>
-/// Bootsharp instance imports do not await <c>Task&lt;int&gt;</c>, so workerd
-/// <c>JsRpcProperty</c> thenables hit the int marshaler. Return this record instead.
-/// </summary>
-public sealed record RpcInt(int Value);
-
-/// <summary>
 /// JS <c>getAlarm(): number | null</c> as a closed shape: a null result means no alarm is
 /// scheduled, otherwise <see cref="ScheduledTimeMs"/> is epoch milliseconds. Boxed because
 /// the wasm marshaler rejects a promise of a nullable primitive (<c>Task&lt;double?&gt;</c>).
@@ -27,6 +21,13 @@ public sealed record DurableObjectNamespaceGetOptions
 /// JS <c>DurableObjectState</c>. WebSocket hibernation, facets, and
 /// <c>blockConcurrencyWhile</c> are omitted (callbacks / host types).
 /// </summary>
+/// <remarks>
+/// Actor-scoped, hence exempt from per-invocation release: the emitted Durable
+/// Object constructs the guest actor once and reuses the same state handle for every later RPC,
+/// so releasing it at the end of the first invocation would leave every later one resolving a
+/// dead id.
+/// </remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IDurableObjectState
 {
     string Id { get; }
@@ -38,6 +39,8 @@ public interface IDurableObjectState
 /// JS <c>DurableObjectStorage</c>. <c>get</c>/<c>put</c> are string-valued
 /// (TS <c>T</c> erased). <c>transaction</c> / <c>transactionSync</c> omitted.
 /// </summary>
+/// <remarks>Reached off the actor-scoped state handle and lives exactly as long as it.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IDurableObjectStorage
 {
     Task<string?> Get(string key);
@@ -74,6 +77,8 @@ public sealed record DurableObjectListOptions
 /// JS <c>SqlStorage</c>. <c>exec</c> is synchronous in workerd; C# gets JSON rows
 /// instead of <c>SqlStorageCursor</c>.
 /// </summary>
+/// <remarks>Reached off the actor-scoped storage handle and lives exactly as long as it.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ISqlStorage
 {
     long DatabaseSize { get; }
@@ -90,6 +95,8 @@ public interface ISqlStorage
 }
 
 /// <summary>JS <c>SyncKvStorage</c> (<c>state.storage.kv</c>).</summary>
+/// <remarks>Reached off the actor-scoped storage handle and lives exactly as long as it.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ISyncKvStorage
 {
     string? Get(string key);

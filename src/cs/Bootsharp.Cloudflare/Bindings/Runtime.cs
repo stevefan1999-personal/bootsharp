@@ -4,16 +4,17 @@ namespace Bootsharp.Cloudflare;
 /// C# projection of <c>@cloudflare/workers-types</c> 5.20260813.1 (workerd).
 /// </summary>
 /// <remarks>
-/// Bootsharp cannot import the .d.ts 1:1:
+/// Bootsharp cannot import the.d.ts 1:1:
 /// <list type="bullet">
 /// <item>One C# method per JS name (TS overloads are flattened).</item>
 /// <item>No generic instance types (<c>KVNamespace&lt;Key&gt;</c>, <c>DurableObjectNamespace&lt;T&gt;</c>).</item>
 /// <item>JS reserved names: C# <c>Delete</c>/<c>Do</c> become <c>$delete</c>/<c>$do</c>.</item>
 /// <item>Records are JSON-copied; interfaces are JS handles (<c>$i.import</c>).</item>
-/// <item>Streams / Request / Response / ArrayBuffer stay on the JS host —
-///   the Worker fetch path snapshots them into app-owned request/response records.</item>
-/// <item><c>Task&lt;int&gt;</c> on an instance import is not awaited by generated JS;
-///   RPC numbers use <see cref="RpcInt"/>.</item>
+/// <item>Streams / Request / Response / ArrayBuffer stay on the JS host
+/// the Worker fetch path snapshots them into app-owned request/response records.</item>
+/// <item>A handle whose JavaScript object outlives the invocation that imported it carries
+/// <c>[JSHandle(Scope = HandleScope.Isolate)]</c>: env bindings and Durable Object state are
+/// isolate-lived, while stubs, cursors and statements are request-scoped.</item>
 /// </list>
 /// Web IDL omitted on purpose (already implemented by workerd, unmarshallable):
 /// DOMException, Console, EventTarget, AbortSignal, Blob/File, Cache/CacheStorage,
@@ -32,6 +33,13 @@ public static class WorkersTypes
 /// JS <c>ExecutionContext</c> (<c>ctx</c> on <c>WorkerEntrypoint</c> / <c>WorkflowEntrypoint</c>).
 /// <c>waitUntil(promise)</c> is not projected — C# cannot pass a host Promise.
 /// </summary>
+/// <remarks>
+/// The one handle carrying a workerd object verbatim: the emitted Workflow entrypoint passes its
+/// own <c>this.ctx</c> with no adapter in between, so the TypeScript declaration names the real
+/// workerd type instead of an empty structural interface that would accept anything. Isolate-scoped
+/// for the same reason <see cref="IDurableObjectState"/> is — the actor is constructed once.
+/// </remarks>
+[JSHandle("ExecutionContext", Scope = HandleScope.Isolate)]
 public interface IExecutionContext
 {
     void PassThroughOnException();

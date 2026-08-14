@@ -34,9 +34,12 @@ export declare function exclusive<T> (work: () => T | PromiseLike<T>): Promise<T
 /** Enters.NET without taking the gate, for Durable Object and Workflow dispatch. */
 export declare function reentrant<T> (work: () => T | PromiseLike<T>): Promise<T>;
 
+/** Marks a host object exempt from per-invocation handle release, and returns it: for objects the
+ * host memoizes for the isolate but which carry no C# handle type. */
+export declare function exemptHandle<T> (instance: T): T;
+
 export declare function missing (name: string): never;
 export declare function wrapIdentity (value: any): any;
-export declare function rpcNumber (pending: any, name: string): Promise<{ value: number }>;
 export declare function wrapDoId (id: any): any;
 export declare function wrapIKvNamespace (ns: any, binding: string): any;
 export declare function wrapID1Database (db: any, binding: string): any;

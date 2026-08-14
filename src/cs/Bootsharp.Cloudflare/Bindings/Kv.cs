@@ -4,6 +4,9 @@ namespace Bootsharp.Cloudflare;
 /// JS <c>KVNamespace</c>. Text get/put only — <c>"json"</c>/<c>"arrayBuffer"</c>/<c>"stream"</c>
 /// overloads and bulk <c>get(string[])</c> are not imported (Bootsharp: one signature per name).
 /// </summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface IKvNamespace
 {
     Task<string?> Get(string key);

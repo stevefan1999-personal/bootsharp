@@ -41,7 +41,38 @@ public class RuntimeAssetTests
         Assert.Contains("wrapState", full.RuntimeImports);
         Assert.Contains("wrapStep", full.RuntimeImports);
         Assert.Contains("wrapScheduledController", full.RuntimeImports);
-        Assert.Contains("rpcNumber", full.RuntimeImports);
+    }
+
+    /// <summary>
+    /// every handle imported during an invocation is released when it ends, so the
+    /// isolate-lived env wrapper has to be exempted where it is memoized. The app's env interface is
+    /// the app's, so it cannot carry <c>[JSHandle(Scope = Isolate)]</c> and the emitted
+    /// wrapper says it imperatively instead — one line, before the memo, on the only path that
+    /// builds the wrapper.
+    /// </summary>
+    [Fact]
+    public void TheMemoizedEnvWrapperIsExemptedFromInvocationScoping ()
+    {
+        var run = GeneratorHarness.Run(TestSources.FetchOnlyWorker);
+        Assert.Contains("  exemptHandle(wrapped);\n  wrappedEnvs.set(env, wrapped);", run.GeneratedJs);
+        Assert.Contains("exemptHandle", run.RuntimeImports);
+    }
+
+    /// <summary>
+    /// The <c>RpcInt</c> box existed only because generated JS did not await a <c>Task&lt;int&gt;</c>
+    /// instance import, so a workerd <c>JsRpcPromise</c> reached the int marshaler unresolved
+    ///. Now that every async import is awaited, the stub passes the RPC
+    /// result through unchanged and neither the box nor its JS normaliser is emitted.
+    /// </summary>
+    [Fact]
+    public void DurableObjectStubsPassRpcResultsThroughWithoutNumberNormalisation ()
+    {
+        var run = GeneratorHarness.RunActors(TestSources.FetchOnlyWorker, TestSources.CounterActor);
+        // `total` returns int and `add` returns Task<int> — both used to be normalised by rpcNumber.
+        Assert.Contains("wrap.total = (...args) => stub[\"total\"](...args);", run.GeneratedJs);
+        Assert.Contains("wrap.add = (...args) => stub[\"add\"](...args);", run.GeneratedJs);
+        Assert.DoesNotContain("rpcNumber", run.GeneratedJs);
+        Assert.DoesNotContain("rpcNumber", GeneratorHarness.PackagedJsRuntime);
     }
 
     /// <summary>

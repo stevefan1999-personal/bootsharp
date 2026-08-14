@@ -35,8 +35,8 @@ internal static class Rules
     /// </summary>
     public static readonly string[] RuntimeExports =
     [
-        "configureRuntime", "enableWorkerTimers", "ensureBoot", "exclusive", "isAssetPath",
-        "missing", "reentrant", "rpcNumber", "toResponse", "wrapDoId", "wrapID1Database",
+        "configureRuntime", "enableWorkerTimers", "ensureBoot", "exclusive", "exemptHandle",
+        "isAssetPath", "missing", "reentrant", "toResponse", "wrapDoId", "wrapID1Database",
         "wrapIKvNamespace", "wrapIQueue", "wrapIR2Bucket", "wrapIWorkflow", "wrapIdentity",
         "wrapRequest", "wrapScheduledController", "wrapState", "wrapStep"
     ];
@@ -119,7 +119,6 @@ internal static class Rules
         ("System", "Double") => "double",
         ("System", "Boolean") => "bool",
         ("System", "String") => "string",
-        (Library, "RpcInt") => "rpcInt",
         _ => null
     };
 

@@ -9,6 +9,12 @@
 // which has to happen before anything the module graph does can schedule a timer. It is
 // re-exported so the emitted module has exactly one import to resolve.
 import { enableWorkerTimers } from "./timer-shim.mjs";
+// Per-invocation handle scoping needs a store that follows the async flow rather than the isolate:
+// `reentrant` exists precisely so an actor call can run while an outer `exclusive` call is
+// suspended, and a single module-level slot would then attribute the outer call's
+// handles to the inner scope and release them early. This import makes `nodejs_compat` (or
+// `nodejs_als`) a prerequisite of the package — both sample wrangler configs already set it.
+import { AsyncLocalStorage } from "node:async_hooks";
 
 export { enableWorkerTimers };
 
@@ -59,10 +65,45 @@ let api = null;
 let booting = null;
 let dotnetGate = Promise.resolve();
 
+// Ids imported during the currently running logical invocation, or undefined outside one.
+const scopes = new AsyncLocalStorage();
+// The booted module's instance registry, or null before boot / when the guest predates scoping.
+let handles = null;
+
+/// Arms per-invocation handle release on the booted Bootsharp module. Called from ensureBoot
+/// rather than from configureRuntime, because at configure time only the loader is known: the
+/// .NET module graph is deliberately not evaluated until first use.
+function installScoping (mod) {
+  if (mod.instances?.trackImported == null) return;
+  handles = mod.instances;
+  handles.trackImported(id => scopes.getStore()?.push(id));
+}
+
+/// Marks a JavaScript object exempt from invocation scoping, and returns it. Used for objects the
+/// host memoizes for the isolate but which have no C# handle type to carry a [JSHandle] lifetime
+/// the emitted env wrapper is the one case. A no-op before boot, which is correct:
+/// nothing can have imported the object yet.
+export function exemptHandle (instance) {
+  handles?.exempt(instance);
+  return instance;
+}
+
+// Handles imported during one logical invocation are released when it ends. workerd request-scopes
+// most Tier-1 objects (IoOwn), so reuse on a later request throws "Cannot perform I/O on behalf of
+// a different request" — and no finalizer will ever run to save us. Before boot, or
+// against a guest whose Bootsharp predates the tracker, this is byte-for-byte the previous
+// behaviour: the work simply runs.
+async function scoped (work) {
+  if (handles == null) return work();
+  const ids = [];
+  try { return await scopes.run(ids, work); }
+  finally { for (const id of ids) handles.releaseImported(id); }
+}
+
 // Top-level events (fetch/queue/scheduled) are serialized: the isolate runs one independent
 // invocation into.NET at a time.
 export function exclusive (work) {
-  const run = dotnetGate.then(work, work);
+  const run = dotnetGate.then(() => scoped(work), () => scoped(work));
   dotnetGate = run.then(() => {}, () => {});
   return run;
 }
@@ -74,7 +115,7 @@ export function exclusive (work) {
 // so a nested call can only interleave at the outer call's await points, and WorkerContext is
 // AsyncLocal, i.e. per async flow rather than per isolate.
 export async function reentrant (work) {
-  return work();
+  return scoped(work);
 }
 
 // LogLevel as.NET orders it. The entry object carries the name for the log index; the number
@@ -98,6 +139,8 @@ export async function ensureBoot () {
     booting = (async () => {
       enableWorkerTimers();
       const mod = await bootLoader();
+      // Armed before boot and before any handler can run, so no import can escape a scope.
+      installScoping(mod);
       // A guest declaring [assembly: Import(typeof(ILogSink))] gets a generated proxy whose
       // handler is bound here, before boot, because the entry point may already log. A guest
       // that declares no sink leaves logSinkExport null and this is skipped: assuming the member
@@ -127,13 +170,6 @@ export function missing (name) {
 }
 
 export function wrapIdentity (value) { return value; }
-
-// Bootsharp instance imports do not await Task<int>, so numeric RPC lands on C# RpcInt.
-export async function rpcNumber (pending, name) {
-  const value = Number(await pending);
-  if (!Number.isFinite(value)) throw new Error(`${name} did not return a number`);
-  return { value };
-}
 
 // JSON has no binary literal: JSON.stringify(new ArrayBuffer(4)) yields {}, silently
 // dropping every SQLite BLOB. Binary cells and binds cross as {"$blob":"<base64>"}. The C# side

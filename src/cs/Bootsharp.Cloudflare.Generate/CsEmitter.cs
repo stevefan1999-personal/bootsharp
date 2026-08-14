@@ -118,7 +118,6 @@ internal static class CsEmitter
             "long" => "JsonLong",
             "double" => "JsonDouble",
             "bool" => "JsonBool",
-            "rpcInt" => "JsonRpcInt",
             _ => "JsonString"
         };
         yield return $"case \"{method.JsName}\": return {encoder}({invoke});";

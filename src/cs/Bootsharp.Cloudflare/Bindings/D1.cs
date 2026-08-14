@@ -4,6 +4,9 @@ namespace Bootsharp.Cloudflare;
 /// JS <c>D1Database</c>. <c>batch(D1PreparedStatement[])</c> is omitted (array of handles).
 /// Alpha <c>dump()</c> omitted (ArrayBuffer).
 /// </summary>
+/// <remarks>An env binding: workerd hands out the same object for the lifetime of the isolate,
+/// so the handle is exempt from per-invocation release.</remarks>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ID1Database
 {
     ID1PreparedStatement Prepare(string query);

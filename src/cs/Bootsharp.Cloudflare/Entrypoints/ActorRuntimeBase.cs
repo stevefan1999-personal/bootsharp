@@ -122,6 +122,4 @@ public abstract class ActorRuntimeBase<TEnv> where TEnv : class
 
     protected static string JsonString(string? value) =>
         value is null ? "null" : $"\"{JsonEncodedText.Encode(value)}\"";
-
-    protected static string JsonRpcInt(RpcInt? value) => value is null ? "null" : JsonInt(value.Value);
 }

@@ -30,8 +30,6 @@ internal static class TestSources
 
         public interface IWorkflowStep { Task Sleep(string name, string duration); }
 
-        public sealed record RpcInt(int Value);
-
         public sealed record WorkflowEvent(string Payload);
 
         [System.AttributeUsage(System.AttributeTargets.Interface)]
@@ -183,8 +181,6 @@ internal static class TestSources
             protected static string JsonBool(bool value) => value ? "true" : "false";
 
             protected static string JsonString(string? value) => value is null ? "null" : $"\"{value}\"";
-
-            protected static string JsonRpcInt(RpcInt? value) => value is null ? "null" : JsonInt(value.Value);
         }
         """;
 
@@ -345,7 +341,7 @@ internal static class TestSources
             public double Average() => 0d;
             public bool Sealed() => true;
             public string Label() => "";
-            public RpcInt Next() => new(0);
+            public int Next() => 0;
             public Task Clear() => Task.CompletedTask;
             public Task<string> Note(string key, string? fallback) => Task.FromResult(fallback ?? key);
             public Task<bool> Record(int amount, long stamp, double weight, bool audited) => Task.FromResult(audited);

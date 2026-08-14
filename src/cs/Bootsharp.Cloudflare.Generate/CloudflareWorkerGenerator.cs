@@ -119,7 +119,7 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
         if (returned is null)
             defects.Add(new Defect("CFW011", "Unsupported RPC return type",
                 $"'{method.Name}' returns '{method.ReturnType.ToDisplayString()}'. Supported: void, Task, " +
-                "int, long, double, bool, string and RpcInt, each optionally wrapped in Task<>.",
+                "int, long, double, bool and string, each optionally wrapped in Task<>.",
                 LocationInfo.From(method)));
         var parameters = new List<Parameter>();
         var optionals = 0;

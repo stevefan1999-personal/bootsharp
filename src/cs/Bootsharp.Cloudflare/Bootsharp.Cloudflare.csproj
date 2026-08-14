@@ -16,6 +16,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- The binding interfaces declare their handle lifetime with Bootsharp's [JSHandle], which
+             is what keeps an isolate-lived env binding out of the per-invocation disposal scope
+             (ADR-0002 §5). Versioned in lockstep, as Bootsharp.Inject is. -->
+        <PackageReference Include="Bootsharp.Common" Version="$(Version)"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8"/>
     </ItemGroup>
 

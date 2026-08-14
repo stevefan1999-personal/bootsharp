@@ -35,7 +35,7 @@ public class ActorDispatchTests
         Assert.Empty(run.DefectIds);
         Assert.Equal("no errors", run.ErrorReport);
         Assert.Contains("case \"reset\":", run.GeneratedCs);
-        Assert.Contains("return JsonRpcInt(ledgerActor.Next());", run.GeneratedCs);
+        Assert.Contains("return JsonInt(ledgerActor.Next());", run.GeneratedCs);
         Assert.Contains("ArgStringOrNull(args, 1, \"note\", \"fallback\")", run.GeneratedCs);
         Assert.Contains("HasArg(args, 1) ? ArgInt(args, 1, \"greet\", \"times\") : 1", run.GeneratedCs);
     }
