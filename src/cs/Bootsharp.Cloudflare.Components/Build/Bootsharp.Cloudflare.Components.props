@@ -1,0 +1,30 @@
+<Project>
+
+    <!--
+        The one feature switch a Components-only project does not get for free.
+
+        Microsoft.AspNetCore.Components embeds four ILLink substitutions. Three of them fire in a
+        Bootsharp app already, because Bootsharp.props sets MetadataUpdaterSupport=false (which
+        removes HotReloadManager) and MetricsSupport=false (which removes ComponentsMetrics and
+        ComponentsActivitySource) — note that those are Bootsharp's doing, not an SDK or NativeAOT
+        default, and that under BsDebug they are skipped. The fourth is gated by a switch declared
+        only in Microsoft.AspNetCore.Components.WebAssembly's own props, which this package does not
+        reference, so the regex route-constraint table stays reachable unless it is declared here.
+        Static SSR never routes, so the value is always false. research/12 §3.
+    -->
+    <ItemGroup>
+        <RuntimeHostConfigurationOption
+            Include="Microsoft.AspNetCore.Components.Routing.RegexConstraintSupport"
+            Value="false" Trim="true"/>
+    </ItemGroup>
+
+    <!--
+        Static SSR never binds, so nothing on the @bind path should stay reachable — but a component
+        that does bind would reach BindConverter, whose array and custom-type paths go through
+        MakeGenericMethod and TypeDescriptor.GetConverter with blanket IL suppressions over them
+        (research/12 §3). Rooting nothing extra is the whole policy: the trim audit ADR-0011 §2
+        requires is a publish with TrimmerSingleWarn=false, and its result is recorded in
+        docs/adr/0006 rather than papered over with a TrimmerRootDescriptor here.
+    -->
+
+</Project>

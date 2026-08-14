@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyTitle>Bootsharp.Cloudflare.Components</AssemblyTitle>
+        <PackageId>Bootsharp.Cloudflare.Components</PackageId>
+        <Description>Razor Components static SSR for Bootsharp apps on Cloudflare Workers: real .razor components rendered by StaticHtmlRenderer inside a workerd isolate. Opt-in; priced at roughly 150 KB bundle gzip over the writer in Bootsharp.Cloudflare.AspNetCore.</Description>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>CS1591</NoWarn>
+        <!-- Consumers publish with NativeAOT-LLVM, so the trim and AOT analyzers have to run here
+             rather than surface as warnings inside the app that references this package. -->
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The two assemblies research/12 §5 proved are the only reachable ones: everything on the
+             .cshtml/MVC path and Components.Endpoints itself declare IsPackable=false and exist only
+             inside the Microsoft.AspNetCore.App shared framework, which a browser-wasm RID cannot
+             reference. These two ship as real, RID-agnostic NuGet packages, so ADR-0007's identity
+             rule says reference them rather than vendor anything into their namespaces — which also
+             means a component compiled for this package is the same type a Blazor client would
+             compile. Components.Web is where StaticHtmlRenderer and HtmlRootComponent live; it drags
+             Components.Forms, Authorization, JSInterop and the Extensions.Diagnostics chain along
+             (13 assemblies in total, measured), none of which static SSR calls. -->
+        <PackageReference Include="Microsoft.AspNetCore.Components" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Build/Bootsharp.Cloudflare.Components.props" Pack="true" PackagePath="build/;buildTransitive/"/>
+    </ItemGroup>
+
+    <!-- The package's own precondition check runs against itself too, so a regression in the
+         substitution it adds fails this build rather than a consumer's. -->
+    <Import Project="Build/Bootsharp.Cloudflare.Components.props"/>
+
+</Project>

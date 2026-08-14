@@ -1,0 +1,13 @@
+@* A component with a parameter and encoded content: the same file a Blazor client would compile. *@
+<h1 class="greeting">Hello, @Name!</h1>
+<ul>
+    @foreach (var item in Items)
+    {
+        <li>@item</li>
+    }
+</ul>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string[] Items { get; set; } = [];
+}

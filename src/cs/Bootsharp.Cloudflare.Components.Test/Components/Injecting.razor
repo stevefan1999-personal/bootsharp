@@ -1,0 +1,4 @@
+@* [Inject] under NativeAOT takes the PropertyInfo.SetValue branch of PropertySetter, with no
+   codegen: this is the property-injection path  audited. *@
+@inject IGreeter Greeter
+<span>@Greeter.Greet()</span>

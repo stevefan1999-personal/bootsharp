@@ -1,0 +1,17 @@
+@* Asynchronous initialization: nothing writes until QuiescenceTask completes, and the continuation
+   must not be posted outside the event that started the render — which is what the inline
+   dispatcher guarantees. *@
+<p>@state</p>
+
+@code {
+    private string state = "pending";
+
+    [Parameter] public Task? Gate { get; set; }
+
+    protected override async Task OnInitializedAsync ()
+    {
+        if (Gate is not null) await Gate;
+        await Task.Yield();
+        state = "settled";
+    }
+}
