@@ -312,18 +312,6 @@ public class UnsupportedSurfaceTests
     }
 
     [Fact]
-    public void RequestCookiesNameTheJavaScriptSideChangeTheyWaitOn ()
-    {
-        Assert.Contains("Set-Cookie", Refusal(static () => { _ = Worker.Context().Request.Cookies; }));
-        var context = Worker.Context();
-        Assert.Throws<PlatformNotSupportedException>(() => { context.Request.Cookies = null!; });
-    }
-
-    [Fact]
-    public void ResponseCookiesRefuseForTheSameReason () =>
-        Assert.Contains("Set-Cookie", Refusal(static () => { _ = Worker.Context().Response.Cookies; }));
-
-    [Fact]
     public async Task FormBindingNamesTheLayerItBelongsTo ()
     {
         Assert.Contains("Forms", Refusal(static () => { _ = Worker.Context().Request.Form; }));
@@ -420,4 +408,103 @@ public class ContextLifetimeTests
         context.Dispose();
         context.Dispose();
     }
+}
+
+/// <summary>
+/// Cookies, both halves. They refused to exist while the response snapshot was a flat header object
+///two <c>Set-Cookie</c> headers comma-joined into one is a malformed cookie,
+/// and shipping the request half alone would have been an API you could read but not answer.
+/// </summary>
+public class CookieTests
+{
+    [Fact]
+    public void RequestCookiesAreParsedFromTheCookieHeader ()
+    {
+        var context = Worker.Context(headersJson: """{"cookie":"session=abc; theme=dark"}""");
+        Assert.Equal("abc", context.Request.Cookies["session"]);
+        Assert.Equal("dark", context.Request.Cookies["theme"]);
+        Assert.Equal(2, context.Request.Cookies.Count);
+        Assert.True(context.Request.Cookies.ContainsKey("session"));
+        Assert.True(context.Request.Cookies.TryGetValue("theme", out var theme));
+        Assert.Equal("dark", theme);
+    }
+
+    /// <summary>A missing cookie is null, not an exception — the contract that differs from
+    /// <c>IDictionary</c>'s and that handlers written against ASP.NET Core rely on.</summary>
+    [Fact]
+    public void AbsentCookiesReadAsNull ()
+    {
+        Assert.Null(Worker.Context().Request.Cookies["session"]);
+        Assert.Empty(Worker.Context().Request.Cookies);
+    }
+
+    /// <summary>The escaping the response half applies is reversed here, so a value carrying the
+    /// delimiters survives the round trip rather than truncating at the first one.</summary>
+    [Fact]
+    public void CookieValuesSurviveTheEscapingRoundTrip ()
+    {
+        var context = Worker.Context();
+        context.Response.Cookies.Append("state", "a;b=c d");
+        var header = context.Response.Headers.SetCookie.ToString();
+        var echoed = Worker.Context(headersJson: $$"""{"cookie":{{Json(header.Split(';')[0])}}}""");
+        Assert.Equal("a;b=c d", echoed.Request.Cookies["state"]);
+    }
+
+    [Fact]
+    public void AppendedCookiesBecomeSeparateSetCookieHeaders ()
+    {
+        var context = Worker.Context();
+        context.Response.Cookies.Append("first", "1");
+        context.Response.Cookies.Append("second", "2");
+        var rendered = HeaderJson.Render(context.Response.Headers);
+        Assert.Equal("""{"Set-Cookie":["first=1; path=/","second=2; path=/"]}""", rendered);
+    }
+
+    [Fact]
+    public void CookieOptionsReachTheHeader ()
+    {
+        var context = Worker.Context();
+        context.Response.Cookies.Append("session", "abc", new CookieOptions {
+            Path = "/api", Domain = "w.dev", Secure = true, HttpOnly = true,
+            SameSite = SameSiteMode.Strict, MaxAge = TimeSpan.FromMinutes(1)
+        });
+        var header = context.Response.Headers.SetCookie.ToString();
+        Assert.Contains("session=abc", header);
+        Assert.Contains("max-age=60", header);
+        Assert.Contains("domain=w.dev", header);
+        Assert.Contains("path=/api", header);
+        Assert.Contains("secure", header);
+        Assert.Contains("samesite=strict", header);
+        Assert.Contains("httponly", header);
+    }
+
+    /// <summary>Deleting is setting an expired one, and the domain and path have to match the
+    /// cookie's — a browser treats them as part of its identity.</summary>
+    [Fact]
+    public void DeletingExpiresTheCookie ()
+    {
+        var context = Worker.Context();
+        context.Response.Cookies.Delete("session", new CookieOptions { Path = "/api" });
+        var header = context.Response.Headers.SetCookie.ToString();
+        Assert.Contains("session=;", header);
+        Assert.Contains("expires=Thu, 01 Jan 1970", header);
+        Assert.Contains("max-age=0", header);
+        Assert.Contains("path=/api", header);
+    }
+
+    /// <summary>The whole point of the exercise: several cookies reach the client as several
+    /// headers, through the array the snapshot renders and the JS side appends one by one.</summary>
+    [Fact]
+    public async Task RepeatedSetCookieSurvivesTheSnapshot ()
+    {
+        var app = Worker.App(static app => RouteHandlerServices.Map(app, "/login", static context => {
+            context.Response.Cookies.Append("session", "abc");
+            context.Response.Cookies.Append("theme", "dark");
+            return Task.CompletedTask;
+        }, null));
+        var answer = await app.Send("GET", "https://w.dev/login");
+        Assert.Equal(["session=abc; path=/", "theme=dark; path=/"], answer.Headers("Set-Cookie"));
+    }
+
+    private static string Json (string value) => System.Text.Json.JsonSerializer.Serialize(value);
 }

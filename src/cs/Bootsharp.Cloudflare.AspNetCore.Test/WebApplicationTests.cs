@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -245,7 +246,10 @@ public class RequestBodyTests
         public string Url => url;
         public string HeadersJson => "{}";
         public string? CfJson => null;
-        public Task<string> Text () { Reads++; return Task.FromResult(body); }
+        public Task<string> Text () => throw new InvalidOperationException(
+            "The invocation reads the body as bytes; reading it as text would corrupt uploads.");
+
+        public Task<byte[]> Bytes () { Reads++; return Task.FromResult(Encoding.UTF8.GetBytes(body)); }
     }
 
     private static async Task<(string Body, int Reads)> Send (string method)
@@ -254,7 +258,7 @@ public class RequestBodyTests
             static context => context.Response.WriteAsync(new StreamReader(context.Request.Body).ReadToEnd()), null));
         var request = new CountingRequest(method, "https://w.dev/echo", "payload");
         var response = await app.InvokeAsync(request);
-        return (response.Body, request.Reads);
+        return (Worker.Text(response), request.Reads);
     }
 
     [Theory]

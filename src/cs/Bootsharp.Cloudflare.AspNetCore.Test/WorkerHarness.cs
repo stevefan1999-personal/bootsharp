@@ -31,19 +31,33 @@ internal sealed partial class TestJson : JsonSerializerContext;
 /// <remarks>Headers are compared through the rendered JSON rather than the dictionary, because the
 /// rendering is the part that crosses the boundary — a header the dictionary holds but the renderer
 /// drops would otherwise pass unnoticed.</remarks>
-internal readonly record struct Answer (int Status, string HeadersJson, string Body)
+internal readonly record struct Answer (int Status, string HeadersJson, string Body, bool PassedThrough = false)
 {
-    public string? Header (string name)
+    /// <summary>The single value rendered under this name, or null when the name is absent.</summary>
+    /// <remarks>Returns null for a name that rendered as an array too: <see cref="Headers"/> is the
+    /// accessor for those, and silently taking the first of several would hide the case this wire
+    /// shape exists for.</remarks>
+    public string? Header (string name) =>
+        Find(name) is { ValueKind: JsonValueKind.String } value ? value.GetString() : null;
+
+    /// <summary>Every value rendered under this name, whether it rendered as a string or an array.</summary>
+    public string?[] Headers (string name) => Find(name) switch {
+        { ValueKind: JsonValueKind.String } value => [value.GetString()],
+        { ValueKind: JsonValueKind.Array } array => [..array.EnumerateArray().Select(static v => v.GetString())],
+        _ => []
+    };
+
+    private JsonElement? Find (string name)
     {
         using var document = JsonDocument.Parse(HeadersJson);
         foreach (var property in document.RootElement.EnumerateObject())
             if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-                return property.Value.GetString();
+                return property.Value.Clone();
         return null;
     }
 }
 
-/// <summary>A workerd <c>Request</c> stand-in: the four values the real handle exposes.</summary>
+/// <summary>A workerd <c>Request</c> stand-in: the values the real handle exposes.</summary>
 internal sealed class FakeRequest (string method, string url, string body = "", string headersJson = "{}") : IJsRequest
 {
     public string Method => method;
@@ -51,6 +65,7 @@ internal sealed class FakeRequest (string method, string url, string body = "", 
     public string HeadersJson => headersJson;
     public string? CfJson => null;
     public Task<string> Text () => Task.FromResult(body);
+    public Task<byte[]> Bytes () => Task.FromResult(Encoding.UTF8.GetBytes(body));
 }
 
 /// <summary>
@@ -74,7 +89,7 @@ internal static class Worker
     public static WorkerHttpContext Context (
         string method = "GET", string url = "https://w.dev/", string headersJson = "{}",
         string body = "", IServiceProvider? services = null) =>
-        new(method, url, headersJson, body, services ?? Services());
+        new(method, url, headersJson, Encoding.UTF8.GetBytes(body), services ?? Services());
 
     /// <summary>Executes a result against a fresh context and reads what it wrote.</summary>
     /// <remarks>The status and headers come off the response, the body off the buffer the response
@@ -113,12 +128,21 @@ internal static class Worker
             methods.Length == 0 ? null : methods);
 
     /// <summary>Drives one event through an application.</summary>
+    /// <remarks>The snapshot's body is bytes — that is the whole point of the byte channel — so the
+    /// assertions read it decoded, and <see cref="Bytes"/> is what a binary case asserts on.</remarks>
     public static async Task<Answer> Send (this WebApplication app,
         string method, string url, string body = "", string headersJson = "{}")
     {
         var response = await app.InvokeAsync(new FakeRequest(method, url, body, headersJson));
-        return new Answer(response.Status, response.HeadersJson, response.Body);
+        return new Answer(response.Status, response.HeadersJson, Text(response), response.PassThroughToAssets);
     }
+
+    /// <summary>The bytes a snapshot carries, whichever half of the body it used.</summary>
+    public static byte[] Bytes (HttpResponseData response) =>
+        response.BodyBytes ?? Encoding.UTF8.GetBytes(response.Body);
+
+    /// <summary>The snapshot's body, decoded.</summary>
+    public static string Text (HttpResponseData response) => Encoding.UTF8.GetString(Bytes(response));
 
     /// <summary>
     /// An endpoint table built without the application, for matcher tests that need to state the

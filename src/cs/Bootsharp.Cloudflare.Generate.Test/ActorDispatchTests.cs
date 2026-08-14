@@ -85,6 +85,24 @@ public class ActorDispatchTests
     }
 
     /// <summary>
+    /// The workflow's step handle reaches user code wrapped, so the callback each <c>do</c> exports
+    /// is released when the step ends. Handing over the raw import instead grew Bootsharp's export
+    /// registry by one delegate per step for the life of the isolate — nothing collects it, because
+    /// workerd runs neither the JS finalization registry nor a NativeAOT finalizer on a schedule.
+    /// </summary>
+    [Fact]
+    public void WorkflowStepsAreHandedOverThroughTheReleasingWrapper()
+    {
+        var run = GeneratorHarness.RunActors(TestSources.DemoWorkflow);
+        Assert.Empty(run.DefectIds);
+        Assert.Equal("no errors", run.ErrorReport);
+        Assert.Contains(
+            "await workflow.Run(new global::Bootsharp.Cloudflare.WorkflowEvent(payloadJson), " +
+            "new global::Bootsharp.Cloudflare.ReleasingWorkflowStep(step));",
+            run.GeneratedCs);
+    }
+
+    /// <summary>
     /// workerd resolves these prototype members itself, so an RPC method that would
     /// claim one is never dispatchable — the caller would silently reach the handler instead.
     /// </summary>

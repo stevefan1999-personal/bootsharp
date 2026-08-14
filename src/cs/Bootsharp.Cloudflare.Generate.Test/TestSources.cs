@@ -30,6 +30,13 @@ internal static class TestSources
 
         public interface IWorkflowStep { Task Sleep(string name, string duration); }
 
+        // Stands in for the library's wrapper, which the generated dispatch hands to Run so the
+        // delegate every step exports is released when the step ends.
+        public sealed class ReleasingWorkflowStep(IWorkflowStep step) : IWorkflowStep
+        {
+            public Task Sleep(string name, string duration) => step.Sleep(name, duration);
+        }
+
         public sealed record WorkflowEvent(string Payload);
 
         [System.AttributeUsage(System.AttributeTargets.Interface)]

@@ -38,13 +38,16 @@ public class HeaderJsonTests
         Assert.Empty(HeaderJson.Parse("7"));
     }
 
-    /// <summary>Only string values are headers; anything else is a bug on the JavaScript side.</summary>
+    /// <summary>An array is a header repeated, which is how <c>getSetCookie()</c> can be handed
+    /// over; anything that is neither string nor array of strings is a bug on the JavaScript side
+    /// and is skipped.</summary>
     [Fact]
-    public void NonStringValuesAreSkipped ()
+    public void ArraysArriveAsRepeatedValuesAndOtherKindsAreSkipped ()
     {
-        var headers = HeaderJson.Parse("""{"a":"1","b":2,"c":null,"d":["x"]}""");
+        var headers = HeaderJson.Parse("""{"a":"1","b":2,"c":null,"set-cookie":["x=1","y=2",7]}""");
         Assert.Equal("1", headers["a"]);
-        Assert.Single(headers);
+        Assert.Equal(["x=1", "y=2"], headers["set-cookie"]);
+        Assert.Equal(2, headers.Count);
     }
 
     /// <summary>
@@ -76,12 +79,25 @@ public class HeaderJsonTests
         Assert.Equal("naïve ☃", parsed["x-unicode"]);
     }
 
-    /// <summary>Multi-valued headers are comma-joined, which is correct for all but Set-Cookie.</summary>
+    /// <summary>
+    /// Multi-valued headers render as an array, so the JavaScript side can append them one by one.
+    /// </summary>
+    /// <remarks>Comma-joining — what this did while the wire shape was flat — is equivalent for
+    /// every header defined as a comma-separated list, and destroys the one that is not: two
+    /// <c>Set-Cookie</c> headers joined by a comma set a single malformed cookie.</remarks>
     [Fact]
-    public void RepeatedValuesAreCommaJoined ()
+    public void RepeatedValuesRenderAsAnArray ()
     {
         var headers = new HeaderDictionary { ["accept"] = new StringValues(["text/html", "application/json"]) };
-        Assert.Equal("""{"accept":"text/html,application/json"}""", HeaderJson.Render(headers));
+        Assert.Equal("""{"accept":["text/html","application/json"]}""", HeaderJson.Render(headers));
+    }
+
+    /// <summary>The round trip a repeated header takes, which the flat shape could not make.</summary>
+    [Fact]
+    public void RepeatedValuesSurviveTheRoundTrip ()
+    {
+        var headers = new HeaderDictionary { ["set-cookie"] = new StringValues(["a=1; path=/", "b=2; path=/"]) };
+        Assert.Equal(["a=1; path=/", "b=2; path=/"], HeaderJson.Parse(HeaderJson.Render(headers))["set-cookie"]);
     }
 
     /// <summary>A header with no values is not a header with an empty value.</summary>

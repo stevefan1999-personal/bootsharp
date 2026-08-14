@@ -73,22 +73,22 @@ internal static class MinimalApiHarness
     /// <summary>File-local types need distinct paths, and an interceptor needs a stable one.</summary>
     private const string appPath = "App.cs";
 
-    private static readonly CSharpParseOptions parseOptions = new CSharpParseOptions(LanguageVersion.Latest)
+    internal static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
         .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", interceptorsNamespace)]);
 
-    private static readonly MetadataReference[] references = [.. References()];
+    internal static readonly MetadataReference[] References = [.. Resolved()];
 
     public static MinimalApiRun Run (string source)
     {
         var compilation = CSharpCompilation.Create(
             "MinimalApiGeneratorTests",
-            [CSharpSyntaxTree.ParseText(source, parseOptions, path: appPath)],
-            references,
+            [CSharpSyntaxTree.ParseText(source, ParseOptions, path: appPath)],
+            References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: NullableContextOptions.Enable));
         IEnumerable<ISourceGenerator> generators = [new MinimalApiGenerator().AsSourceGenerator()];
         var driver = CSharpGeneratorDriver
-            .Create(generators, parseOptions: parseOptions)
+            .Create(generators, parseOptions: ParseOptions)
             .RunGeneratorsAndUpdateCompilation(compilation, out var emitted, out var defects);
         var produced = driver.GetRunResult().Results.Single().GeneratedSources;
         return new MinimalApiRun(
@@ -105,7 +105,7 @@ internal static class MinimalApiHarness
     /// <remarks>Layered by simple name rather than concatenated: an assembly present in both — the
     /// framework's System.Text.Json, say — would otherwise be referenced twice and every type in it
     /// would be ambiguous.</remarks>
-    private static IEnumerable<MetadataReference> References ()
+    private static IEnumerable<MetadataReference> Resolved ()
     {
         var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator))
@@ -141,9 +141,9 @@ internal static class MinimalApiHarness
                 // The app tree keeps the path it had when the generator ran: an interceptable
                 // location is that path plus a checksum, so re-parsing it as a different file would
                 // leave every [InterceptsLocation] pointing at nothing.
-                [CSharpSyntaxTree.ParseText(source, parseOptions, path: appPath),
-                    CSharpSyntaxTree.ParseText(run.Generated, parseOptions, path: "BootsharpMinimalApi.g.cs")],
-                references,
+                [CSharpSyntaxTree.ParseText(source, ParseOptions, path: appPath),
+                    CSharpSyntaxTree.ParseText(run.Generated, ParseOptions, path: "BootsharpMinimalApi.g.cs")],
+                References,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                     nullableContextOptions: NullableContextOptions.Enable));
             var result = compilation.Emit(path);
@@ -165,7 +165,7 @@ internal static class MinimalApiHarness
     /// from a temporary directory that holds nothing else, and the package is deliberately not on
     /// this project's own reference path (see the csproj).
     /// </summary>
-    private static void Resolve ()
+    internal static void Resolve ()
     {
         if (resolving) return;
         resolving = true;
@@ -176,7 +176,7 @@ internal static class MinimalApiHarness
         };
     }
 
-    private static string PackagePath ()
+    internal static string PackagePath ()
     {
         var path = typeof(MinimalApiHarness).GetTypeInfo().Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()

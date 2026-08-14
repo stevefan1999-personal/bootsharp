@@ -1,5 +1,7 @@
 using System.Text;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -291,7 +293,7 @@ public class StubbedResultTests
         var error = Assert.Throws<PlatformNotSupportedException>(
             static () => { TypedResults.Stream(new MemoryStream()); });
         Assert.Contains("milestone 0b", error.Message);
-        Assert.Contains("TypedResults.Content", error.Message);
+        Assert.Contains("TypedResults.Bytes", error.Message);
     }
 
     [Fact]
@@ -345,4 +347,145 @@ public class ResultsFacadeTests
 
     private static async Task Agree (IResult typed, IResult untyped) =>
         Assert.Equal(await Worker.Execute(typed), await Worker.Execute(untyped));
+}
+
+/// <summary>
+/// The byte channel: the buffered body is bytes from the handler all the way
+/// to the <c>Response</c>, so a binary answer is byte-exact rather than mangled into replacement
+/// characters by a UTF-8 round trip — which is what returning it as text did.
+/// </summary>
+public class BinaryResultTests
+{
+    // A PNG header: not valid UTF-8, so a round trip through a string is visible as corruption.
+    private static readonly byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    [Fact]
+    public async Task BytesArriveUnchanged ()
+    {
+        using var context = Worker.Context();
+        await TypedResults.Bytes(png, "image/png").ExecuteAsync(context);
+        Assert.Equal(png, ((MemoryStream)context.Response.Body).ToArray());
+        Assert.Equal("image/png", context.Response.ContentType);
+        Assert.Equal(png.Length, context.Response.ContentLength);
+    }
+
+    /// <summary>The default content type is the one that says "these are bytes".</summary>
+    [Fact]
+    public async Task BytesDefaultToOctetStream ()
+    {
+        using var context = Worker.Context();
+        await TypedResults.Bytes(png).ExecuteAsync(context);
+        Assert.Equal("application/octet-stream", context.Response.ContentType);
+    }
+
+    /// <summary>
+    /// A download name is written through <c>ContentDispositionHeaderValue</c>, which renders the
+    /// RFC 5987 form beside the plain one — hand-formatting the header is where a non-ASCII name is
+    /// lost.
+    /// </summary>
+    [Fact]
+    public async Task FileNamesAreEncodedForTheHeader ()
+    {
+        using var context = Worker.Context();
+        await TypedResults.File(png, "image/png", "naïve ☃.png").ExecuteAsync(context);
+        var disposition = context.Response.Headers.ContentDisposition.ToString();
+        Assert.StartsWith("attachment;", disposition);
+        Assert.Contains("filename*=UTF-8''na%C3%AFve%20%E2%98%83.png", disposition);
+    }
+
+    /// <summary>The snapshot carries the bytes, not a decoded string: the point of the channel.</summary>
+    [Fact]
+    public async Task TheSnapshotCarriesBytesRatherThanText ()
+    {
+        var app = Worker.App(static app => RouteHandlerServices.Map(app, "/logo",
+            static context => TypedResults.Bytes(png, "image/png").ExecuteAsync(context), null));
+        var response = await app.InvokeAsync(new FakeRequest("GET", "https://w.dev/logo"));
+        Assert.Equal(png, response.BodyBytes);
+        Assert.Equal("", response.Body);
+    }
+
+    /// <summary>A response that wrote nothing carries no body at all, rather than an empty array.</summary>
+    [Fact]
+    public async Task EmptyResponsesCarryNoBody ()
+    {
+        var app = Worker.App(static app => RouteHandlerServices.Map(app, "/nothing",
+            static context => TypedResults.NoContent().ExecuteAsync(context), null));
+        var response = await app.InvokeAsync(new FakeRequest("GET", "https://w.dev/nothing"));
+        Assert.Null(response.BodyBytes);
+        Assert.Equal("", response.Body);
+    }
+
+    /// <summary>The request half of the same concern: an upload reaches the handler as it arrived.</summary>
+    [Fact]
+    public async Task RequestBodiesArriveAsBytes ()
+    {
+        byte[]? received = null;
+        var app = Worker.App(app => RouteHandlerServices.Map(app, "/upload", async context => {
+            using var buffer = new MemoryStream();
+            await context.Request.Body.CopyToAsync(buffer);
+            received = buffer.ToArray();
+        }, null));
+        await app.InvokeAsync(new BinaryRequest("POST", "https://w.dev/upload", png));
+        Assert.Equal(png, received);
+    }
+
+    private sealed class BinaryRequest (string method, string url, byte[] body) : IJsRequest
+    {
+        public string Method => method;
+        public string Url => url;
+        public string HeadersJson => "{}";
+        public string? CfJson => null;
+        public Task<string> Text () => throw new InvalidOperationException("The body is not text.");
+        public Task<byte[]> Bytes () => Task.FromResult(body);
+    }
+}
+
+/// <summary>
+/// Declining a request in favour of the assets binding, which used to be a status of zero — a value
+/// no <c>Response</c> can carry and no handler could mean on purpose.
+/// </summary>
+public class PassThroughToAssetsTests
+{
+    [Fact]
+    public async Task TheSnapshotSaysTheWorkerDeclined ()
+    {
+        var app = Worker.App(static app => RouteHandlerServices.Map(app, "/app/{*rest}",
+            static context => TypedResults.PassThroughToAssets().ExecuteAsync(context), null));
+        var response = await app.InvokeAsync(new FakeRequest("GET", "https://w.dev/app/index.html"));
+        Assert.True(response.PassThroughToAssets);
+        // The status stays a real one: nothing reads it, and a zero could not be built into a
+        // Response if anything did.
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+    }
+
+    [Fact]
+    public async Task AnsweredRequestsDoNotDeclineByAccident ()
+    {
+        var app = Worker.App(static app => app.Says("/a", "answered"));
+        Assert.False((await app.InvokeAsync(new FakeRequest("GET", "https://w.dev/a"))).PassThroughToAssets);
+        Assert.False((await app.InvokeAsync(new FakeRequest("GET", "https://w.dev/missing"))).PassThroughToAssets);
+    }
+
+    /// <summary>It is answered by the worker entrypoint, so a context whose response is not this
+    /// layer's is refused rather than silently declining nothing.</summary>
+    [Fact]
+    public async Task ForeignResponsesAreRefusedRatherThanIgnored ()
+    {
+        using var context = Worker.Context();
+        context.Features.Set<IHttpResponseFeature>(new ForeignResponse());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => TypedResults.PassThroughToAssets().ExecuteAsync(context));
+        Assert.Contains("worker entrypoint", error.Message);
+    }
+
+    private sealed class ForeignResponse : IHttpResponseFeature
+    {
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+        public string? ReasonPhrase { get; set; }
+        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
+        public Stream Body { get; set; } = Stream.Null;
+        public bool HasStarted => false;
+        public void OnStarting (Func<object, Task> callback, object state) { }
+        public void OnCompleted (Func<object, Task> callback, object state) { }
+    }
 }

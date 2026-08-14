@@ -95,6 +95,7 @@ internal static class BindingSources
             public string? CfJson => null;
             private string Text_ { get; }
             public Task<string> Text() => Task.FromResult(Text_);
+            public Task<byte[]> Bytes() => Task.FromResult(System.Text.Encoding.UTF8.GetBytes(Text_));
         }
 
         public static class Runner
@@ -105,7 +106,10 @@ internal static class BindingSources
             {
                 app ??= Api.Build();
                 var response = await app.InvokeAsync(new FakeRequest(method, url, body));
-                return response.Status + "|" + response.Body;
+                var text = response.BodyBytes is null
+                    ? response.Body
+                    : System.Text.Encoding.UTF8.GetString(response.BodyBytes);
+                return response.Status + "|" + text;
             }
         }
         """;
