@@ -38,6 +38,11 @@ internal static class BindingSources
         // Nothing registers this one: it is the "neither a service nor bindable" case.
         public interface IUnregistered { }
 
+        // Open-generic stand-in for ILogger<> / Logger<>: the registration is unbound, the
+        // handler parameter is a closed construction of the same definition.
+        public interface IRepo<T> { }
+        public sealed class Repo<T> : IRepo<T> { }
+
         // Parsable by a bare TryParse, the rung below IParsable on upstream's ladder.
         public readonly struct Slug
         {
@@ -73,6 +78,7 @@ internal static class BindingSources
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.Services.AddSingleton<IClock>(new Clock());
                 builder.Services.AddKeyedSingleton<ICache, Cache>("main");
+                builder.Services.AddSingleton(typeof(IRepo<>), typeof(Repo<>));
                 var app = builder.Build();
                 {{string.Join("\n        ", maps)}}
                 app.Run();
@@ -268,6 +274,33 @@ public class MinimalApiServiceBindingTests
         var run = MinimalApiHarness.Run(BindingSources.App("""app.MapGet("/a", (IClock clock) => "ok");"""));
         Assert.Empty(run.DefectIds);
         Assert.Contains("httpContext.RequestServices.GetRequiredService<global::IClock>();", run.Generated);
+    }
+
+    /// <summary>
+    /// <c>AddSingleton(typeof(ILogger&lt;&gt;), typeof(Logger&lt;&gt;))</c> is the registration
+    /// this package's JSON logger (and <c>AddLogging</c>) actually write. A handler parameter
+    /// typed <c>ILogger&lt;Foo&gt;</c> is a closed construction of that same definition, not a
+    /// different service.
+    /// </summary>
+    [Fact]
+    public void OpenGenericRegistrationCoversAClosedConstruction ()
+    {
+        var run = MinimalApiHarness.Run(BindingSources.App("""app.MapGet("/a", (IRepo<Todo> repo) => "ok");"""));
+        Assert.Empty(run.DefectIds);
+        Assert.Contains("GetRequiredService<global::IRepo<global::Todo>>();", run.Generated);
+        Assert.DoesNotContain("TryResolveBodyAsync", run.Generated);
+    }
+
+    /// <summary>The same open generic on a body-carrying method must stay a service, or the
+    /// logger is misdiagnosed as a missing JSON payload (CFW029).</summary>
+    [Fact]
+    public void OpenGenericRegistrationIsNotMistakenForAJsonBody ()
+    {
+        var run = MinimalApiHarness.Run(BindingSources.App(
+            """app.MapPost("/a", (IRepo<Todo> repo, Todo todo) => todo.Id);"""));
+        Assert.Empty(run.DefectIds);
+        Assert.Contains("GetRequiredService<global::IRepo<global::Todo>>();", run.Generated);
+        Assert.Contains("TryResolveBodyAsync<global::Todo>(", run.Generated);
     }
 
     /// <summary>A keyed registration still says "this type is a service".</summary>

@@ -82,10 +82,10 @@ public sealed class MinimalApiGenerator : IIncrementalGenerator
         if (ctx.SemanticModel.GetOperation(ctx.Node) is not IInvocationOperation operation) return null;
         var method = operation.TargetMethod;
         if (method.ContainingNamespace?.ToDisplayString() != "Microsoft.Extensions.DependencyInjection") return null;
-        if (method.TypeArguments.Length > 0) return EndpointResolver.Display(method.TypeArguments[0]);
+        if (method.TypeArguments.Length > 0) return RegistrationKey(method.TypeArguments[0]);
         // The non-generic overloads take the service type as a typeof argument.
         foreach (var argument in operation.Arguments)
-            if (argument.Value is ITypeOfOperation typeOf) return EndpointResolver.Display(typeOf.TypeOperand);
+            if (argument.Value is ITypeOfOperation typeOf) return RegistrationKey(typeOf.TypeOperand);
         return null;
     }
 
@@ -153,7 +153,7 @@ public sealed class MinimalApiGenerator : IIncrementalGenerator
                 parameters.Add(parameter);
                 continue;
             }
-            if (registered.Contains(parameter.Type)) parameters.Add(parameter with { Source = BindingSource.Service });
+            if (IsRegistered(registered, parameter.Type)) parameters.Add(parameter with { Source = BindingSource.Service });
             else if (parameter.Source == BindingSource.ServiceOrBody)
                 parameters.Add(parameter with { Source = BindingSource.JsonBody });
             else
@@ -225,4 +225,55 @@ public sealed class MinimalApiGenerator : IIncrementalGenerator
     }
 
     private static string Bare (string type) => type.EndsWith("?") ? type.Substring(0, type.Length - 1) : type;
+
+    /// <summary>
+    /// An open-generic registration covers every closed construction of the same definition.
+    /// </summary>
+    /// <remarks>
+    /// The compile-time scan is an ordinal string match. <c>AddSingleton(typeof(ILogger&lt;&gt;),
+    /// typeof(Logger&lt;&gt;))</c> — the shape <c>AddLogging</c> and this package's JSON logger both
+    /// use — therefore never matched a handler parameter typed <c>ILogger&lt;Foo&gt;</c>, and GET
+    /// became CFW026 while POST/PUT became a misleading CFW029 treating the logger as a body.
+    /// </remarks>
+    private static bool IsRegistered (HashSet<string> registered, string type)
+    {
+        var bare = Bare(type);
+        if (registered.Contains(type) || registered.Contains(bare)) return true;
+        var unbound = Unbound(bare);
+        return unbound is not null && registered.Contains(unbound);
+    }
+
+    /// <summary>The lookup key for one registration: closed types stay fully qualified, open
+    /// generics collapse to the <c>ILogger&lt;&gt;</c> / <c>Dict&lt;,&gt;</c> spelling the match uses.</summary>
+    private static string RegistrationKey (ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named && named.IsUnboundGenericType)
+            return Unbound(named.OriginalDefinition) ?? EndpointResolver.Display(type);
+        if (type is INamedTypeSymbol { IsGenericType: true } generic
+            && generic.TypeArguments.All(static argument => argument.TypeKind == TypeKind.TypeParameter))
+            return Unbound(generic.OriginalDefinition) ?? EndpointResolver.Display(type);
+        return EndpointResolver.Display(type);
+    }
+
+    private static string? Unbound (INamedTypeSymbol definition)
+    {
+        var display = EndpointResolver.Display(definition);
+        return Unbound(Bare(display));
+    }
+
+    private static string? Unbound (string type)
+    {
+        var open = type.IndexOf('<');
+        if (open < 0 || type.Length == 0 || type[type.Length - 1] != '>') return null;
+        var arity = 1;
+        var depth = 0;
+        for (var index = open + 1; index < type.Length - 1; index++)
+            switch (type[index])
+            {
+                case '<': depth++; break;
+                case '>': depth--; break;
+                case ',' when depth == 0: arity++; break;
+            }
+        return type.Substring(0, open + 1) + new string(',', Math.Max(arity - 1, 0)) + ">";
+    }
 }
