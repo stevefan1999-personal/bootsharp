@@ -152,9 +152,28 @@ internal sealed class MetadataProjector : IDisposable
             .Select(method => Project(kind, method))
             .Where(static method => method is not null)
             .Select(static method => method!)
+            // A hub-hosting Durable Object inherits its transport surface rather than declaring it,
+            // and DeclaredOnly is what both front ends read — so without this the emitted module
+            // would expose no RPC at all and the SignalR JavaScript half would call four methods
+            // that were never emitted. The generator injects the same four. See Rules.HubTransports.
+            .Concat(HostsHub(type) ? HubTransport() : [])
             .ToArray();
         return new Entrypoint(kind, type.Name, type.Namespace ?? "", new(methods));
     }
+
+    /// <summary>Whether the class derives from <c>HubDurableObject&lt;THub, TEnv&gt;</c>.</summary>
+    private static bool HostsHub (Type type) => Rules.HostsHub(Bases(type));
+
+    /// <summary>Full names of every base, unbound — metadata spells a generic name with its arity.</summary>
+    private static IEnumerable<string> Bases (Type type)
+    {
+        for (var current = BaseType(type); current is not null; current = BaseType(current))
+            yield return current.Namespace is { Length: > 0 } space
+                ? $"{space}.{Rules.Unbound(current.Name)}" : Rules.Unbound(current.Name);
+    }
+
+    private static IEnumerable<Method> HubTransport () => Rules.HubTransports
+        .Select(static m => new Method(m.CsName, m.JsName, "rpc", m.Return, m.Await));
 
     /// <summary>
     /// Walks to the runtime base the way the generator does, on the unbound name: the bases are

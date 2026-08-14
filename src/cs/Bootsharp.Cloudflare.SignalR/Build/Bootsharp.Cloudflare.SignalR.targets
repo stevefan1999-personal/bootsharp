@@ -1,0 +1,25 @@
+<Project>
+
+    <PropertyGroup>
+        <BsCfSignalRRoot>$(MSBuildThisFileDirectory)../</BsCfSignalRRoot>
+        <!-- Hand-written ESM shipped with this package: the hibernation handlers the entrypoint
+             generator is forbidden to project (ADR-0010 §3). Copied next to the emitted module,
+             never pasted into it — same rule as Bootsharp.Cloudflare's own js/ assets. -->
+        <BsCfSignalRAssetDirectory Condition="'$(BsCfSignalRAssetDirectory)' == ''">$(BsCfSignalRRoot)js</BsCfSignalRAssetDirectory>
+    </PropertyGroup>
+
+    <!-- After BootsharpCloudflareWorker, which removes the worker directory before it writes: a
+         copy that ran earlier would be deleted by it. -->
+    <Target Name="BootsharpCloudflareSignalR" AfterTargets="BootsharpCloudflareWorker"
+            Condition="'$(BsCfWorkerDirectory)' != ''">
+
+        <ItemGroup>
+            <BsCfSignalRAsset Include="$(BsCfSignalRAssetDirectory)/**"/>
+        </ItemGroup>
+
+        <Copy SourceFiles="@(BsCfSignalRAsset)"
+              DestinationFiles="@(BsCfSignalRAsset->'$(BsCfWorkerDirectory)/%(RecursiveDir)%(Filename)%(Extension)')"/>
+
+    </Target>
+
+</Project>

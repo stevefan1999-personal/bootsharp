@@ -142,4 +142,52 @@ internal static class Rules
         var tick = name.IndexOf('`');
         return tick < 0 ? name : name.Substring(0, tick);
     }
+
+    /// <summary>
+    /// Durable Object base the SignalR package declares for a hub. It is named here
+    /// rather than in that package's own rules because both front ends have to recognise it: the
+    /// generator emits the C# dispatch for a hub-hosting actor, the publish task emits the ESM half,
+    /// and a rule only one of them knows is a module whose two halves disagree.
+    /// </summary>
+    public const string HubDurableObject = "Bootsharp.Cloudflare.SignalR.HubDurableObject";
+
+    /// <summary>
+    /// The transport surface <c>HubDurableObject&lt;THub, TEnv&gt;</c> declares, as both projections
+    /// see it. Both front ends read <i>declared</i> members only, and these are inherited — so
+    /// without injecting them a hub-hosting Durable Object would project no RPC at all and its
+    /// JavaScript half would call four methods that were never emitted.
+    /// </summary>
+    /// <remarks>
+    /// Each is an ordinary RPC shape (string arguments, void/int result), which is exactly why the
+    /// hosting glue needs no new emission machinery: the JavaScript in
+    /// <c>Bootsharp.Cloudflare.SignalR/js/signalr.mjs</c> subclasses the generated Durable Object
+    /// and forwards workerd's reserved hibernation handlers to these.
+    /// </remarks>
+    public static readonly HubTransport[] HubTransports =
+    [
+        new("Accept", "accept", "void", true, [("connectionId", "string")]),
+        new("Deliver", "deliver", "void", true, [("connectionId", "string"), ("message", "string")]),
+        new("Disconnect", "disconnect", "void", true, [("connectionId", "string"), ("reason", "string?")]),
+        new("Sweep", "sweep", "int", true, [])
+    ];
+
+    /// <summary>
+    /// Whether a class inherits <see cref="HubDurableObject"/>, given a walk of its base names. The
+    /// walk itself differs per front end (symbols carry no arity, metadata spells it), so each
+    /// passes the sequence it can produce and the decision stays in one place.
+    /// </summary>
+    public static bool HostsHub (IEnumerable<string> baseNames) =>
+        baseNames.Any(name => name == HubDurableObject);
 }
+
+/// <param name="CsName">Name on <c>HubDurableObject</c>.</param>
+/// <param name="JsName">Name the emitted Durable Object exposes.</param>
+/// <param name="Return">Encoded return shape, as the projection spells it.</param>
+/// <param name="Await">Whether it is Task-returning.</param>
+/// <param name="Parameters">Name and encoded shape of each argument.</param>
+internal sealed record HubTransport(
+    string CsName,
+    string JsName,
+    string Return,
+    bool Await,
+    (string Name, string Kind)[] Parameters);

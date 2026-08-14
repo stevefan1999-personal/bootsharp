@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyTitle>Bootsharp.Cloudflare.SignalR</AssemblyTitle>
+        <PackageId>Bootsharp.Cloudflare.SignalR</PackageId>
+        <Description>SignalR hubs for Bootsharp apps on Cloudflare Workers: the real JSON hub protocol over Durable Object hibernation WebSockets, with generated hub dispatch and no shared-framework reference.</Description>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>CS1591</NoWarn>
+        <!-- Consumers publish with NativeAOT-LLVM, so the trim and AOT analyzers have to run here
+             rather than surface as warnings inside the app that references this package. -->
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- ConnectionState and ConnectionDispatchQueue are internal — they are the attachment
+             codec and the ordering discipline, neither of which is a consumer-facing shape — and
+             both are exactly what the suite has to assert directly. -->
+        <InternalsVisibleTo Include="Bootsharp.Cloudflare.SignalR.Test"/>
+        <ProjectReference Include="../Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The wire trio, referenced real and never vendored (ADR-0007's identity rule; ADR-0010
+             §1). All three are packable netstandard2.0 assemblies declaring
+             <SupportedPlatform browser>, IsTrimmable, and — verified by grep over their src trees —
+             zero System.Reflection / Requires* / DynamicallyAccessedMembers. The only reflective
+             lines in the whole graph are JsonHubProtocol's two object?/Type JsonSerializer
+             overloads, which resolve solely through PayloadSerializerOptions.TypeInfoResolver once
+             JsonSerializerIsReflectionEnabledByDefault is false. Reimplementing the 940-line
+             ordered/unordered JSON parser is the likeliest way to break wire compatibility.
+             Connections.Abstractions arrives transitively and contributes TransferFormat. -->
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="10.0.8"/>
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.Json" Version="10.0.8"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The Durable Object host half is hand-written JavaScript, like js/runtime.mjs: the
+             hibernation handlers (webSocketMessage/webSocketClose/webSocketError/alarm) are
+             reserved workerd prototype members that the entrypoint generator refuses to project
+             (Projection/Rules.cs), so this is the module an app's worker subclasses. Copied next
+             to the emitted module by the targets below, never pasted into it. -->
+        <Content Include="js/**" Pack="true" PackagePath="js/"/>
+        <None Include="Build/Bootsharp.Cloudflare.SignalR.targets" Pack="true" PackagePath="build/;buildTransitive/"/>
+    </ItemGroup>
+
+</Project>
