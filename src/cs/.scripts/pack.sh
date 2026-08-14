@@ -22,4 +22,5 @@ dotnet pack Bootsharp.Inject -o .nuget -c Release
 dotnet pack Bootsharp -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare.Publish -o .nuget -c Release
 dotnet pack Bootsharp.Cloudflare -o .nuget -c Release
+dotnet pack Bootsharp.Cloudflare.AspNetCore -o .nuget -c Release
 dotnet restore

@@ -1,0 +1,65 @@
+<Project>
+
+    <!--
+      ADR-0008 §7's forbidden set, enforced at build.
+
+      Four things must never enter this package's graph, and each has a different reason:
+        * RequestDelegateFactory  — [RequiresDynamicCode], eight Expression.Compile sites, 22
+          reflection roots. Mechanically impossible under NativeAOT (research/09 §4).
+        * the Matching/** DFA     — 6,682 lines whose IL-emitted jump table is already dead under
+          AOT; replaced by the compile-time-ordered matcher.
+        * DefaultJsonTypeInfoResolver — the reflective JSON fallback, reachable unless an MSBuild
+          property is set, which is not an AOT default (research/09 §5).
+        * FrameworkReference to Microsoft.AspNetCore.App — has no browser-wasm runtime pack, so it
+          cannot resolve at all; catching it here turns an inscrutable restore error into a sentence.
+
+      What this check is, honestly: three assertions over things a build can actually see. Reference
+      shape is exact. The type-name scan reads the compiled assembly's bytes and looks for the
+      names — a TypeRef or TypeDef puts its name in the metadata #Strings heap as UTF-8, so a type
+      that entered the graph cannot hide from it, while a name that appears only in a source comment
+      or an XML doc never reaches the assembly. It over-approximates in one direction (a string
+      literal naming a forbidden type would trip it) and that is the safe direction.
+
+      It is not a reachability proof. A full one needs an ILLink descriptor and a trimmed publish,
+      which only the consuming app can run — this package has no entry point of its own. The app-side
+      assertion belongs with the sample's publish, where an ILC link actually happens.
+    -->
+
+    <Target Name="AssertNoFrameworkReference" BeforeTargets="ResolveReferences">
+        <ItemGroup>
+            <!-- Microsoft.NETCore.App is the implicit reference every SDK project carries and is
+                 the one this package is built against; anything else is a shared framework. -->
+            <_ForbiddenFrameworkReference Include="@(FrameworkReference)" Exclude="Microsoft.NETCore.App"/>
+        </ItemGroup>
+        <Error Condition="'@(_ForbiddenFrameworkReference)' != ''"
+               Text="Bootsharp.Cloudflare.AspNetCore must not carry a shared-framework reference (found: @(_ForbiddenFrameworkReference)). Microsoft.AspNetCore.App has no browser-wasm runtime pack, so it can never resolve for a Worker; the ASP.NET Core surface here is vendored source (ADR-0008 §3)."/>
+    </Target>
+
+    <Target Name="AssertNoSharedFrameworkReferences" AfterTargets="ResolveAssemblyReferences">
+        <ItemGroup>
+            <_ForbiddenReference Include="@(ReferencePath)"
+                                 Condition="$([System.String]::Copy('%(ReferencePath.Filename)').StartsWith('Microsoft.AspNetCore.'))"/>
+        </ItemGroup>
+        <Error Condition="'@(_ForbiddenReference)' != ''"
+               Text="Bootsharp.Cloudflare.AspNetCore must not reference a Microsoft.AspNetCore.* assembly (found: @(_ForbiddenReference->'%(Filename)')). Those ship only inside per-RID ReadyToRun runtime packs; ADR-0007's identity rule says vendor their source instead."/>
+    </Target>
+
+    <Target Name="AssertForbiddenTypesAbsent" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+        <PropertyGroup>
+            <_AssemblyText>$([System.IO.File]::ReadAllText('$(TargetPath)'))</_AssemblyText>
+        </PropertyGroup>
+        <Error Condition="$(_AssemblyText.Contains('RequestDelegateFactory'))"
+               Text="RequestDelegateFactory entered $(TargetFileName). It is [RequiresDynamicCode] and cannot run under NativeAOT (ADR-0008 §7)."/>
+        <Error Condition="$(_AssemblyText.Contains('DfaMatcher'))"
+               Text="The Routing DFA matcher entered $(TargetFileName). Routing is matched by the compile-time-ordered matcher here (ADR-0008 §4)."/>
+        <Error Condition="$(_AssemblyText.Contains('ILEmitTrie'))"
+               Text="ILEmitTrieFactory entered $(TargetFileName). It is [RequiresDynamicCode] and already dead under AOT (ADR-0008 §7)."/>
+        <Error Condition="$(_AssemblyText.Contains('DefaultJsonTypeInfoResolver'))"
+               Text="DefaultJsonTypeInfoResolver entered $(TargetFileName). JSON is closed-world here: every serialized type needs source-generated metadata (ADR-0008 §7)."/>
+        <Error Condition="$(_AssemblyText.Contains('ParameterPolicyActivator'))"
+               Text="ParameterPolicyActivator entered $(TargetFileName). It resolves route constraints by constructor reflection; constraints are resolved at compile time here (research/09 §3)."/>
+        <Error Condition="$(_AssemblyText.Contains('RegexRouteConstraint'))"
+               Text="RegexRouteConstraint entered $(TargetFileName). It is the one constraint that roots System.Text.RegularExpressions; regex constraints are a separate opt-in layer (ADR-0008 §3)."/>
+    </Target>
+
+</Project>

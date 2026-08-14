@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyTitle>Bootsharp.Cloudflare.AspNetCore</AssemblyTitle>
+        <PackageId>Bootsharp.Cloudflare.AspNetCore</PackageId>
+        <Description>Minimal API for Bootsharp apps on Cloudflare Workers: the ASP.NET Core HTTP contract layer, a workerd-shaped host and a curated TypedResults, with no shared-framework reference.</Description>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- CS1574: vendored XML docs <see cref> types this package deliberately skips
+             (LinkGenerator, RegexRouteConstraint). Rewriting the doc comments would be a local
+             change to every affected file for no behavioural gain, and would make the vendored
+             text drift from upstream for the sake of a documentation link. -->
+        <NoWarn>CS1591;CS1574</NoWarn>
+        <!-- Consumers publish with NativeAOT-LLVM, so the trim and AOT analyzers have to run here
+             rather than surface as warnings inside the app that references this package. -->
+        <IsAotCompatible>true</IsAotCompatible>
+        <!-- BSCF_LEAN is upstream's own COMPONENTS symbol, renamed by Vendored/vendor.ts: Blazor
+             maintains a reflection-free, LinkGenerator-free selection of Routing behind it, and
+             taking that selection is what keeps RouteValueDictionary's PropertyHelper storage and
+             RoutePatternFactory's `object defaults` overloads out of the graph (ADR-0008 §3).
+             BSCF_WORKERS excises the few regions upstream has no seam of its own for. -->
+        <DefineConstants>$(DefineConstants);BSCF_LEAN;BSCF_WORKERS</DefineConstants>
+    </PropertyGroup>
+
+    <Import Project="Build/ForbiddenSet.targets"/>
+
+    <ItemGroup>
+        <ProjectReference Include="../Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Referenced real, never vendored: these ship as RID-agnostic NuGet packages, so ADR-0007's
+             identity rule forbids declaring into their namespaces. Microsoft.Extensions.Features is
+             where IFeatureCollection/FeatureCollection/FeatureReferences live; DependencyInjection
+             degrades to its interpreted engine under AOT; Options contributes IOptions<T> only —
+             the configuration binder behind Configure<T>(IConfiguration) is never referenced. -->
+        <PackageReference Include="Microsoft.Extensions.Features" Version="10.0.8"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8"/>
+        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8"/>
+        <PackageReference Include="Microsoft.Extensions.Primitives" Version="10.0.8"/>
+        <!-- Packable too, so the identity rule points at the real package rather than a vendored
+             copy. research/09 SKIPped it on the phantom 47 KiB headroom; ADR-0007 re-scopes that to
+             a placement decision, and the vendored subset reaches only HeaderNames' const strings
+             and SetCookieHeaderValue, which ILC trims down to what is called. -->
+        <PackageReference Include="Microsoft.Net.Http.Headers" Version="10.0.8"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The vendoring tool and its manifest are sources of record, not compilation inputs. -->
+        <None Include="Vendored/vendor.ts"/>
+        <None Include="Vendored/manifest.json"/>
+        <None Include="THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/"/>
+        <!-- Named for the package so NuGet imports it automatically, and placed in buildTransitive/
+             as well so an app that reaches this package through another one still gets the
+             interceptor opt-in the generated Map* dispatch needs. -->
+        <None Include="Build/Bootsharp.Cloudflare.AspNetCore.props" Pack="true" PackagePath="build/;buildTransitive/"/>
+    </ItemGroup>
+
+    <!-- Everything above ships to consumers; this project builds no interceptors of its own, so the
+         opt-in is not imported here. -->
+
+
+</Project>

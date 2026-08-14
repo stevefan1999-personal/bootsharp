@@ -1,0 +1,21 @@
+<Project>
+
+    <!--
+        Opts the app's compilation into the one namespace this package's generator intercepts in.
+
+        Interceptors are gated per namespace: Roslyn only honours [InterceptsLocation] on a method
+        whose containing namespace is listed in InterceptorsNamespaces (Microsoft.CSharp.Core.targets
+        passes it as the `InterceptorsNamespaces` feature). Without this file, a Map* call site would
+        compile against the un-intercepted body in EndpointRouteBuilderExtensions and throw at
+        startup — which is exactly the failure ADR-0008 §1 exists to prevent, so the opt-in ships
+        with the package rather than being a line every consumer has to remember.
+
+        The generator itself travels in the Bootsharp.Cloudflare package's analyzers/ folder (one
+        analyzer assembly for the family), which reaches consumers of this package through the
+        dependency on it.
+    -->
+    <PropertyGroup>
+        <InterceptorsNamespaces>$(InterceptorsNamespaces);Bootsharp.Cloudflare.AspNetCore.Generated</InterceptorsNamespaces>
+    </PropertyGroup>
+
+</Project>

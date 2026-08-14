@@ -1,0 +1,877 @@
+{
+  "commit": "80de79ab881ab6b3899146db6c6fb8f8d339fd94",
+  "leanRewrites": [
+    {
+      "from": "using Microsoft.AspNetCore.Components.Routing;",
+      "to": "using Microsoft.AspNetCore.Http;\nusing Microsoft.AspNetCore.Routing;"
+    },
+    {
+      "from": "using Microsoft.AspNetCore.Components.Routing.Patterns;",
+      "to": "using Microsoft.AspNetCore.Routing.Patterns;"
+    },
+    {
+      "from": "namespace Microsoft.AspNetCore.Components.Routing;",
+      "to": "namespace Microsoft.AspNetCore.Routing;"
+    },
+    {
+      "from": "namespace Microsoft.AspNetCore.Components.Routing.Patterns;",
+      "to": "namespace Microsoft.AspNetCore.Routing.Patterns;"
+    }
+  ],
+  "files": [
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpContext.cs",
+      "local": "Http.Abstractions/HttpContext.cs",
+      "excisions": [
+        {
+          "from": "[DebuggerDisplay(\"{DebuggerToString(),nq}\")]",
+          "to": "[DebuggerTypeProxy(typeof(HttpContextDebugView))]",
+          "why": "debugger views live in src/Shared/Debugger, which is not vendored, and a DebuggerTypeProxy roots the proxy type in the AOT graph for a debugger workerd does not host"
+        },
+        {
+          "from": "private string DebuggerToString()",
+          "to": "public DictionaryItemDebugView<Type, object>[] Items => _features.Select(pair => new DictionaryItemDebugView<Type, object>(pair)).ToArray();",
+          "extra": 1,
+          "why": "the proxy bodies excised above"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpRequest.cs",
+      "local": "Http.Abstractions/HttpRequest.cs",
+      "excisions": [
+        {
+          "from": "[DebuggerDisplay(\"{DebuggerToString(),nq}\")]",
+          "to": "[DebuggerTypeProxy(typeof(HttpRequestDebugView))]",
+          "why": "debugger views live in src/Shared/Debugger, which is not vendored"
+        },
+        {
+          "from": "private string DebuggerToString()",
+          "to": "public RouteValueDictionary RouteValues => _request.RouteValues;",
+          "extra": 1,
+          "why": "the proxy bodies excised above"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpResponse.cs",
+      "local": "Http.Abstractions/HttpResponse.cs",
+      "excisions": [
+        {
+          "from": "[DebuggerDisplay(\"{DebuggerToString(),nq}\")]",
+          "to": "[DebuggerTypeProxy(typeof(HttpResponseDebugView))]",
+          "why": "debugger views live in src/Shared/Debugger, which is not vendored"
+        },
+        {
+          "from": "internal string DebuggerToString()",
+          "to": "public bool HasStarted => _response.HasStarted;",
+          "extra": 1,
+          "why": "the proxy bodies excised above"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/ConnectionInfo.cs",
+      "local": "Http.Abstractions/ConnectionInfo.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/WebSocketManager.cs",
+      "local": "Http.Abstractions/WebSocketManager.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/PathString.cs",
+      "local": "Http.Abstractions/PathString.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HostString.cs",
+      "local": "Http.Abstractions/HostString.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/QueryString.cs",
+      "local": "Http.Abstractions/QueryString.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/FragmentString.cs",
+      "local": "Http.Abstractions/FragmentString.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpProtocol.cs",
+      "local": "Http.Abstractions/HttpProtocol.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpMethods.cs",
+      "local": "Http.Abstractions/HttpMethods.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/StatusCodes.cs",
+      "local": "Http.Abstractions/StatusCodes.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/RequestDelegate.cs",
+      "local": "Http.Abstractions/RequestDelegate.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/IApplicationBuilder.cs",
+      "local": "Http.Abstractions/IApplicationBuilder.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/IMiddleware.cs",
+      "local": "Http.Abstractions/IMiddleware.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/ICorsMetadata.cs",
+      "local": "Http.Abstractions/ICorsMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/AsParametersAttribute.cs",
+      "local": "Http.Abstractions/AsParametersAttribute.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/BadHttpRequestException.cs",
+      "local": "Http.Abstractions/BadHttpRequestException.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/EndpointFilterDelegate.cs",
+      "local": "Http.Abstractions/EndpointFilterDelegate.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/IEndpointFilter.cs",
+      "local": "Http.Abstractions/IEndpointFilter.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/EndpointFilterInvocationContext.cs",
+      "local": "Http.Abstractions/EndpointFilterInvocationContext.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/DefaultEndpointFilterInvocationContext.cs",
+      "local": "Http.Abstractions/DefaultEndpointFilterInvocationContext.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/EndpointFilterFactoryContext.cs",
+      "local": "Http.Abstractions/EndpointFilterFactoryContext.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/HttpResults/IResult.cs",
+      "local": "Http.Abstractions/IResult.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Extensions/EndpointBuilder.cs",
+      "local": "Http.Abstractions/EndpointBuilder.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Extensions/IEndpointConventionBuilder.cs",
+      "local": "Http.Abstractions/IEndpointConventionBuilder.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/Endpoint.cs",
+      "local": "Http.Abstractions/Endpoint.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/EndpointMetadataCollection.cs",
+      "local": "Http.Abstractions/EndpointMetadataCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/IEndpointFeature.cs",
+      "local": "Http.Abstractions/IEndpointFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/IRouteValuesFeature.cs",
+      "local": "Http.Abstractions/IRouteValuesFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/EndpointHttpContextExtensions.cs",
+      "local": "Http.Abstractions/EndpointHttpContextExtensions.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Routing/RouteValueDictionary.cs",
+      "local": "Http.Abstractions/RouteValueDictionary.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class RouteValueDictionary : IDictionary<string, object?>, IReadOnlyDictionary<string, object?>",
+          "to": "public class RouteValueDictionary : IDictionary<string, object?>, IReadOnlyDictionary<string, object?>"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IEndpointMetadataProvider.cs",
+      "local": "Http.Abstractions/Metadata/IEndpointMetadataProvider.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IEndpointParameterMetadataProvider.cs",
+      "local": "Http.Abstractions/Metadata/IEndpointParameterMetadataProvider.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IProducesResponseTypeMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IProducesResponseTypeMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/ProducesResponseTypeMetadata.cs",
+      "local": "Http.Abstractions/Metadata/ProducesResponseTypeMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IAcceptsMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IAcceptsMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/AcceptsMetadata.cs",
+      "local": "Http.Abstractions/Metadata/AcceptsMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromBodyMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromBodyMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromHeaderMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromHeaderMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromQueryMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromQueryMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromRouteMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromRouteMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromFormMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromFormMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IFromServiceMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IFromServiceMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IParameterBindingMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IParameterBindingMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IRouteDiagnosticsMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IRouteDiagnosticsMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/IEndpointDescriptionMetadata.cs",
+      "local": "Http.Abstractions/Metadata/IEndpointDescriptionMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/ISummaryMetadata.cs",
+      "local": "Http.Abstractions/Metadata/ISummaryMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Metadata/ITagsMetadata.cs",
+      "local": "Http.Abstractions/Metadata/ITagsMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/IExcludeFromDescriptionMetadata.cs",
+      "local": "Routing/IExcludeFromDescriptionMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpRequestFeature.cs",
+      "local": "Http.Features/IHttpRequestFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpResponseFeature.cs",
+      "local": "Http.Features/IHttpResponseFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpResponseBodyFeature.cs",
+      "local": "Http.Features/IHttpResponseBodyFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpRequestBodyDetectionFeature.cs",
+      "local": "Http.Features/IHttpRequestBodyDetectionFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpRequestLifetimeFeature.cs",
+      "local": "Http.Features/IHttpRequestLifetimeFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHttpRequestIdentifierFeature.cs",
+      "local": "Http.Features/IHttpRequestIdentifierFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IItemsFeature.cs",
+      "local": "Http.Features/IItemsFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IQueryFeature.cs",
+      "local": "Http.Features/IQueryFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IRequestCookiesFeature.cs",
+      "local": "Http.Features/IRequestCookiesFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IResponseCookiesFeature.cs",
+      "local": "Http.Features/IResponseCookiesFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IServiceProvidersFeature.cs",
+      "local": "Http.Features/IServiceProvidersFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/ISessionFeature.cs",
+      "local": "Http.Features/ISessionFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IFormFeature.cs",
+      "local": "Http.Features/IFormFeature.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHeaderDictionary.cs",
+      "local": "Http.Features/IHeaderDictionary.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IHeaderDictionary.Keyed.cs",
+      "local": "Http.Features/IHeaderDictionary.Keyed.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IQueryCollection.cs",
+      "local": "Http.Features/IQueryCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IFormCollection.cs",
+      "local": "Http.Features/IFormCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IFormFile.cs",
+      "local": "Http.Features/IFormFile.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IFormFileCollection.cs",
+      "local": "Http.Features/IFormFileCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IRequestCookieCollection.cs",
+      "local": "Http.Features/IRequestCookieCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/IResponseCookies.cs",
+      "local": "Http.Features/IResponseCookies.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/CookieOptions.cs",
+      "local": "Http.Features/CookieOptions.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/SameSiteMode.cs",
+      "local": "Http.Features/SameSiteMode.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/ISession.cs",
+      "local": "Http.Features/ISession.cs"
+    },
+    {
+      "upstream": "src/Http/Http/src/HeaderDictionary.cs",
+      "local": "Http/HeaderDictionary.cs"
+    },
+    {
+      "upstream": "src/Http/Http/src/QueryCollection.cs",
+      "local": "Http/QueryCollection.cs"
+    },
+    {
+      "upstream": "src/Http/Routing.Abstractions/src/IParameterPolicy.cs",
+      "local": "Routing/IParameterPolicy.cs"
+    },
+    {
+      "upstream": "src/Http/Routing.Abstractions/src/IRouteConstraint.cs",
+      "local": "Routing/IRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal interface IRouteConstraint : IParameterPolicy",
+          "to": "public interface IRouteConstraint : IParameterPolicy"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/RouteValueEqualityComparer.cs",
+      "local": "Routing/RouteValueEqualityComparer.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class RouteValueEqualityComparer : IEqualityComparer<object?>",
+          "to": "public class RouteValueEqualityComparer : IEqualityComparer<object?>"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Template/RoutePrecedence.cs",
+      "local": "Routing/RoutePrecedence.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal static class RoutePrecedence",
+          "to": "public static class RoutePrecedence"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/RouteEndpoint.cs",
+      "local": "Routing/RouteEndpoint.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/IHttpMethodMetadata.cs",
+      "local": "Routing/IHttpMethodMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/HttpMethodMetadata.cs",
+      "local": "Routing/HttpMethodMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/IEndpointNameMetadata.cs",
+      "local": "Routing/IEndpointNameMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/EndpointNameMetadata.cs",
+      "local": "Routing/EndpointNameMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/EndpointNameAttribute.cs",
+      "local": "Routing/EndpointNameAttribute.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/IRouteNameMetadata.cs",
+      "local": "Routing/IRouteNameMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/RouteNameMetadata.cs",
+      "local": "Routing/RouteNameMetadata.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePattern.cs",
+      "local": "Routing/Patterns/RoutePattern.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePattern",
+          "to": "public sealed class RoutePattern"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternPart.cs",
+      "local": "Routing/Patterns/RoutePatternPart.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal abstract class RoutePatternPart",
+          "to": "public abstract class RoutePatternPart"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternPartKind.cs",
+      "local": "Routing/Patterns/RoutePatternPartKind.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal enum RoutePatternPartKind",
+          "to": "public enum RoutePatternPartKind"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternParameterKind.cs",
+      "local": "Routing/Patterns/RoutePatternParameterKind.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal enum RoutePatternParameterKind",
+          "to": "public enum RoutePatternParameterKind"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternLiteralPart.cs",
+      "local": "Routing/Patterns/RoutePatternLiteralPart.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternLiteralPart : RoutePatternPart",
+          "to": "public sealed class RoutePatternLiteralPart : RoutePatternPart"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternSeparatorPart.cs",
+      "local": "Routing/Patterns/RoutePatternSeparatorPart.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternSeparatorPart : RoutePatternPart",
+          "to": "public sealed class RoutePatternSeparatorPart : RoutePatternPart"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternParameterPart.cs",
+      "local": "Routing/Patterns/RoutePatternParameterPart.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternParameterPart : RoutePatternPart",
+          "to": "public sealed class RoutePatternParameterPart : RoutePatternPart"
+        }
+      ],
+      "excisions": [
+        {
+          "from": "else if (constraint.ParameterPolicy is Constraints.RegexRouteConstraint regexConstraint)",
+          "to": "}",
+          "extra": 0,
+          "why": "debug-string special case for the excised RegexRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternParameterPolicyReference.cs",
+      "local": "Routing/Patterns/RoutePatternParameterPolicyReference.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternParameterPolicyReference",
+          "to": "public sealed class RoutePatternParameterPolicyReference"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternPathSegment.cs",
+      "local": "Routing/Patterns/RoutePatternPathSegment.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternPathSegment",
+          "to": "public sealed class RoutePatternPathSegment"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternException.cs",
+      "local": "Routing/Patterns/RoutePatternException.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal sealed class RoutePatternException : Exception",
+          "to": "public sealed class RoutePatternException : Exception"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternFactory.cs",
+      "local": "Routing/Patterns/RoutePatternFactory.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal static class RoutePatternFactory",
+          "to": "public static partial class RoutePatternFactory"
+        }
+      ],
+      "excisions": [
+        {
+          "from": "else if (constraint is string content)",
+          "to": "}",
+          "extra": 0,
+          "why": "the string overload compiles the token into a RegexRouteConstraint, which is the one constraint that roots System.Text.RegularExpressions (ADR-0008 §3 keeps regex out of the core package); the remaining else throws for an unrecognised constraint object"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternParser.cs",
+      "local": "Routing/Patterns/RoutePatternParser.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RouteParameterParser.cs",
+      "local": "Routing/Patterns/RouteParameterParser.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternMatcher.cs",
+      "local": "Routing/Patterns/RoutePatternMatcher.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Routing/src/Patterns/RoutePatternDebugStringFormatter.cs",
+      "local": "Routing/Patterns/RoutePatternDebugStringFormatter.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/BoolRouteConstraint.cs",
+      "local": "Routing/Constraints/BoolRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class BoolRouteConstraint : IRouteConstraint",
+          "to": "public class BoolRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/IntRouteConstraint.cs",
+      "local": "Routing/Constraints/IntRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class IntRouteConstraint : IRouteConstraint",
+          "to": "public class IntRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/LongRouteConstraint.cs",
+      "local": "Routing/Constraints/LongRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class LongRouteConstraint : IRouteConstraint",
+          "to": "public class LongRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/GuidRouteConstraint.cs",
+      "local": "Routing/Constraints/GuidRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class GuidRouteConstraint : IRouteConstraint",
+          "to": "public class GuidRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/DecimalRouteConstraint.cs",
+      "local": "Routing/Constraints/DecimalRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class DecimalRouteConstraint : IRouteConstraint",
+          "to": "public class DecimalRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/DoubleRouteConstraint.cs",
+      "local": "Routing/Constraints/DoubleRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class DoubleRouteConstraint : IRouteConstraint",
+          "to": "public class DoubleRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/FloatRouteConstraint.cs",
+      "local": "Routing/Constraints/FloatRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class FloatRouteConstraint : IRouteConstraint",
+          "to": "public class FloatRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/DateTimeRouteConstraint.cs",
+      "local": "Routing/Constraints/DateTimeRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class DateTimeRouteConstraint : IRouteConstraint",
+          "to": "public class DateTimeRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/LengthRouteConstraint.cs",
+      "local": "Routing/Constraints/LengthRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class LengthRouteConstraint : IRouteConstraint",
+          "to": "public class LengthRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/MaxLengthRouteConstraint.cs",
+      "local": "Routing/Constraints/MaxLengthRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class MaxLengthRouteConstraint : IRouteConstraint",
+          "to": "public class MaxLengthRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/MinLengthRouteConstraint.cs",
+      "local": "Routing/Constraints/MinLengthRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class MinLengthRouteConstraint : IRouteConstraint",
+          "to": "public class MinLengthRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/MaxRouteConstraint.cs",
+      "local": "Routing/Constraints/MaxRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class MaxRouteConstraint : IRouteConstraint",
+          "to": "public class MaxRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/MinRouteConstraint.cs",
+      "local": "Routing/Constraints/MinRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class MinRouteConstraint : IRouteConstraint",
+          "to": "public class MinRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/RangeRouteConstraint.cs",
+      "local": "Routing/Constraints/RangeRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class RangeRouteConstraint : IRouteConstraint",
+          "to": "public class RangeRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/NullRouteConstraint.cs",
+      "local": "Routing/Constraints/NullRouteConstraint.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/CompositeRouteConstraint.cs",
+      "local": "Routing/Constraints/CompositeRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class CompositeRouteConstraint : IRouteConstraint",
+          "to": "public class CompositeRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/OptionalRouteConstraint.cs",
+      "local": "Routing/Constraints/OptionalRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class OptionalRouteConstraint : IRouteConstraint",
+          "to": "public class OptionalRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/FileNameRouteConstraint.cs",
+      "local": "Routing/Constraints/FileNameRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class FileNameRouteConstraint : IRouteConstraint",
+          "to": "public class FileNameRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Http/Routing/src/Constraints/NonFileNameRouteConstraint.cs",
+      "local": "Routing/Constraints/NonFileNameRouteConstraint.cs",
+      "lean": true,
+      "rewrites": [
+        {
+          "from": "internal class NonFileNameRouteConstraint : IRouteConstraint",
+          "to": "public class NonFileNameRouteConstraint : IRouteConstraint"
+        }
+      ]
+    },
+    {
+      "upstream": "src/Shared/UrlDecoder/UrlDecoder.cs",
+      "local": "Shared/UrlDecoder.cs"
+    },
+    {
+      "upstream": "src/Shared/Debugger/DebuggerHelpers.cs",
+      "local": "Shared/DebuggerHelpers.cs"
+    },
+    {
+      "upstream": "src/Shared/Debugger/DictionaryDebugView.cs",
+      "local": "Shared/DictionaryDebugView.cs"
+    },
+    {
+      "upstream": "src/Shared/Debugger/StringValuesDictionaryDebugView.cs",
+      "local": "Shared/StringValuesDictionaryDebugView.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Features/src/WebSocketAcceptContext.cs",
+      "local": "Http.Features/WebSocketAcceptContext.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/PathTokenizer.cs",
+      "local": "Routing/PathTokenizer.cs",
+      "lean": true
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Resources.resx",
+      "local": "Http.Abstractions/Resources.cs",
+      "resx": "Microsoft.AspNetCore.Http.Abstractions"
+    },
+    {
+      "upstream": "src/Http/Routing/src/Resources.resx",
+      "local": "Routing/Resources.cs",
+      "resx": "Microsoft.AspNetCore.Routing"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/EndpointFilterInvocationContextOfT.Generated.cs",
+      "local": "Http.Abstractions/EndpointFilterInvocationContextOfT.Generated.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/ProblemDetails/ProblemDetails.cs",
+      "local": "Http.Abstractions/ProblemDetails.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/ProblemDetails/HttpValidationProblemDetails.cs",
+      "local": "Http.Abstractions/HttpValidationProblemDetails.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/Builder/RouteHandlerBuilder.cs",
+      "local": "Routing/RouteHandlerBuilder.cs"
+    },
+    {
+      "upstream": "src/Http/Routing/src/RouteEndpointBuilder.cs",
+      "local": "Routing/RouteEndpointBuilder.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Extensions/HttpResponseWritingExtensions.cs",
+      "local": "Http.Abstractions/HttpResponseWritingExtensions.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Extensions/UseExtensions.cs",
+      "local": "Http.Abstractions/UseExtensions.cs"
+    },
+    {
+      "upstream": "src/Http/Http.Abstractions/src/Extensions/RunExtensions.cs",
+      "local": "Http.Abstractions/RunExtensions.cs"
+    },
+    {
+      "upstream": "src/Shared/ValueTaskExtensions/ValueTaskExtensions.cs",
+      "local": "Shared/ValueTaskExtensions.cs"
+    },
+    {
+      "upstream": "src/Shared/Debugger/DictionaryItemDebugView.cs",
+      "local": "Shared/DictionaryItemDebugView.cs"
+    }
+  ]
+}
