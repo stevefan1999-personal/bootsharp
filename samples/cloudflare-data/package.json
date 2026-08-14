@@ -1,0 +1,19 @@
+{
+  "name": "bootsharp-cloudflare-data",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "publish:cs": "dotnet publish backend/Cloudflare.Data.csproj -c Release /p:BsLlvm=true /p:MSBuildEnableWorkloadResolver=false",
+    "migrate:local": "wrangler d1 migrations apply bootsharp-cf-data --local",
+    "dev": "npm run publish:cs && wrangler dev",
+    "deploy": "npm run publish:cs && wrangler deploy",
+    "types": "wrangler types",
+    "check:ts": "npm run types && tsc --noEmit -p tsconfig.json",
+    "size": "wrangler check startup",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.122.0",
+    "typescript": "^5.9.3"
+  }
+}

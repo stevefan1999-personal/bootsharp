@@ -1,0 +1,24 @@
+<Project>
+  <PropertyGroup>
+    <!-- Host SDK has a broken workload set (10.0.109.1). LLVM does not need wasm-tools. -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <_DotNetRoot Condition="'$(_DotNetRoot)' == ''">$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))))</_DotNetRoot>
+    <_EmscriptenPacks>/usr/share/dotnet/packs/</_EmscriptenPacks>
+  </PropertyGroup>
+
+  <!--
+    The Emscripten packs are versioned with the runtime, so a literal version here breaks every
+    LLVM publish the moment the host's .NET patch level moves — it went 10.0.9 -> 10.0.11 mid-session
+    and every browser-wasm publish in the repository stopped finding emcc. The version directory is
+    matched with a wildcard instead: MSBuild expands wildcards in Import, so whichever pack is
+    installed is the one imported, and a host with no packs at all imports nothing (the guard is on
+    the parent directory, because a wildcard that matches nothing is an error).
+  -->
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64')"/>
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64')"/>
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64')"/>
+
+</Project>

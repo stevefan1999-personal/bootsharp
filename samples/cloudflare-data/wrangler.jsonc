@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bootsharp-cloudflare-data",
+  // Emitted by `dotnet publish` (the Bootsharp.Cloudflare publish task), next to the wasm binary
+  // and the Bootsharp ES modules it imports. `npm run dev` and `npm run deploy` publish first.
+  "main": "dist/worker/entrypoints.ts",
+  "compatibility_date": "2026-08-13",
+  // Required by Bootsharp.Cloudflare, not optional: js/runtime.mjs imports AsyncLocalStorage from
+  // node:async_hooks to scope handles per logical invocation, and the same scoping is
+  // what the.NET DI scope in WebApplication.InvokeAsync nests inside.
+  "compatibility_flags": ["nodejs_compat"],
+  // No account_id on purpose: `wrangler dev --local` needs none, and `wrangler deploy` takes the
+  // account from `wrangler login`. Add yours only if your credentials reach more than one account.
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // workerd refuses to compile wasm from bytes inside a request, so the binary reaches the isolate
+  // as a module import instead — this rule is what makes `import wasmModule from "*.wasm"` legal.
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "d1_databases": [
+    // Placeholder database_id. `wrangler dev --local` simulates D1 against.wrangler/state and never
+    // reads it; before deploying, run `wrangler d1 create bootsharp-cf-data` and paste the id it
+    // prints over these zeroes. database_name must match the argument you pass to
+    // `wrangler d1 migrations apply`.
+    {
+      "binding": "DB",
+      "database_name": "bootsharp-cf-data",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

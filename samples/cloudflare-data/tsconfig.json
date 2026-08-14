@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    // Runtime types and the Env shape come from worker-configuration.d.ts (`npm run types`), which
+    // is projected from wrangler.jsonc and therefore knows the actual bindings.
+    "types": [],
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true
+  },
+  // The worker module is publish output, not source: this is the gate that keeps a
+  // regression in the emitter from reaching wrangler. It resolves "./runtime.mjs" through the
+  // declarations the package ships beside it, and "*.wasm" through the ambient wasm.d.ts.
+  "include": ["dist/worker/**/*.ts", "worker-configuration.d.ts"]
+}

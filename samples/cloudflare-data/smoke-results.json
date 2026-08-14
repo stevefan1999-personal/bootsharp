@@ -1,0 +1,419 @@
+{
+  "ranAt": "2026-08-14T12:49:44.983Z",
+  "port": 8798,
+  "passed": 10,
+  "total": 10,
+  "checks": [
+    {
+      "check": "health",
+      "pass": true,
+      "status": 200,
+      "ok": true,
+      "runtime": ".NET 10.0.0",
+      "isolateId": "9c36e606-0ca7-4e2b-a028-bade22a0870d",
+      "exchanges": [
+        {
+          "request": "GET /api/health",
+          "status": 200,
+          "response": {
+            "ok": true,
+            "runtime": ".NET 10.0.0",
+            "environment": "development",
+            "isolateId": "9c36e606-0ca7-4e2b-a028-bade22a0870d"
+          }
+        }
+      ]
+    },
+    {
+      "check": "diScope",
+      "pass": true,
+      "sharedWithinRequest": true,
+      "repositorySawSameScope": true,
+      "differsAcrossRequests": true,
+      "sequenceAdvanced": true,
+      "singletonIsStable": true,
+      "scopeWasDisposed": true,
+      "exchanges": [
+        {
+          "request": "GET /api/diag/scope",
+          "status": 200,
+          "response": {
+            "scopeId": "a39cdca8-a219-406f-87d6-73d447f985d6",
+            "repositoryScopeId": "a39cdca8-a219-406f-87d6-73d447f985d6",
+            "oneScopePerRequest": true,
+            "scopeSequence": 1,
+            "isolateId": "9c36e606-0ca7-4e2b-a028-bade22a0870d",
+            "scopesDisposed": 0
+          }
+        },
+        {
+          "request": "GET /api/diag/scope",
+          "status": 200,
+          "response": {
+            "scopeId": "73649693-ff9a-4021-aae4-836299117938",
+            "repositoryScopeId": "73649693-ff9a-4021-aae4-836299117938",
+            "oneScopePerRequest": true,
+            "scopeSequence": 2,
+            "isolateId": "9c36e606-0ca7-4e2b-a028-bade22a0870d",
+            "scopesDisposed": 1
+          }
+        }
+      ]
+    },
+    {
+      "check": "handleLifetime",
+      "pass": true,
+      "first": 200,
+      "second": 200,
+      "secondIsArray": true,
+      "exchanges": [
+        {
+          "request": "GET /api/ado/notes?take=1",
+          "status": 200,
+          "response": []
+        },
+        {
+          "request": "GET /api/ado/notes?take=1",
+          "status": 200,
+          "response": []
+        }
+      ]
+    },
+    {
+      "check": "crud:ado",
+      "pass": true,
+      "provider": "ado",
+      "created": 201,
+      "location": "/api/ado/notes/13",
+      "databaseAssignedId": true,
+      "stamped": true,
+      "readBack": true,
+      "updatedBody": true,
+      "updatePersisted": true,
+      "updatedAtBefore": "2026-08-14 12:49:44",
+      "updatedAtAfter": "2026-08-14 12:49:44",
+      "createdAtHeld": true,
+      "deleted": 204,
+      "gone": 404,
+      "exchanges": [
+        {
+          "request": "POST /api/ado/notes",
+          "requestBody": {
+            "body": "ado-smoke-1786711784393"
+          },
+          "status": 201,
+          "location": "/api/ado/notes/13",
+          "response": {
+            "id": 13,
+            "body": "ado-smoke-1786711784393",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/ado/notes/13",
+          "status": 200,
+          "response": {
+            "id": 13,
+            "body": "ado-smoke-1786711784393",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "PUT /api/ado/notes/13",
+          "requestBody": {
+            "body": "ado-smoke-1786711784393-edited"
+          },
+          "status": 200,
+          "response": {
+            "id": 13,
+            "body": "ado-smoke-1786711784393-edited",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/ado/notes/13",
+          "status": 200,
+          "response": {
+            "id": 13,
+            "body": "ado-smoke-1786711784393-edited",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "DELETE /api/ado/notes/13",
+          "status": 204
+        },
+        {
+          "request": "GET /api/ado/notes/13",
+          "status": 404,
+          "response": {
+            "title": "Note not found",
+            "status": 404,
+            "detail": "No note carries id 13."
+          }
+        }
+      ]
+    },
+    {
+      "check": "crud:orm",
+      "pass": true,
+      "provider": "orm",
+      "created": 201,
+      "location": "/api/orm/notes/14",
+      "databaseAssignedId": true,
+      "stamped": true,
+      "readBack": true,
+      "updatedBody": true,
+      "updatePersisted": true,
+      "updatedAtBefore": "2026-08-14 12:49:44",
+      "updatedAtAfter": "2026-08-14 12:49:44",
+      "createdAtHeld": true,
+      "deleted": 204,
+      "gone": 404,
+      "exchanges": [
+        {
+          "request": "POST /api/orm/notes",
+          "requestBody": {
+            "body": "orm-smoke-1786711784530"
+          },
+          "status": 201,
+          "location": "/api/orm/notes/14",
+          "response": {
+            "id": 14,
+            "body": "orm-smoke-1786711784530",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/orm/notes/14",
+          "status": 200,
+          "response": {
+            "id": 14,
+            "body": "orm-smoke-1786711784530",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "PUT /api/orm/notes/14",
+          "requestBody": {
+            "body": "orm-smoke-1786711784530-edited"
+          },
+          "status": 200,
+          "response": {
+            "id": 14,
+            "body": "orm-smoke-1786711784530-edited",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/orm/notes/14",
+          "status": 200,
+          "response": {
+            "id": 14,
+            "body": "orm-smoke-1786711784530-edited",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "DELETE /api/orm/notes/14",
+          "status": 204
+        },
+        {
+          "request": "GET /api/orm/notes/14",
+          "status": 404,
+          "response": {
+            "title": "Note not found",
+            "status": 404,
+            "detail": "No note carries id 14."
+          }
+        }
+      ]
+    },
+    {
+      "check": "search:ado",
+      "pass": true,
+      "provider": "ado",
+      "found": true,
+      "literalBeatsParameter": true,
+      "clamped": 200,
+      "exchanges": [
+        {
+          "request": "POST /api/ado/notes",
+          "requestBody": {
+            "body": "ado-searchable-1786711784694"
+          },
+          "status": 201,
+          "location": "/api/ado/notes/15",
+          "response": {
+            "id": 15,
+            "body": "ado-searchable-1786711784694",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/ado/notes/search?q=ado-searchable-1786711784694",
+          "status": 200,
+          "response": [
+            {
+              "id": 15,
+              "body": "ado-searchable-1786711784694",
+              "createdAt": "2026-08-14 12:49:44",
+              "updatedAt": "2026-08-14 12:49:44"
+            }
+          ]
+        },
+        {
+          "request": "GET /api/ado/notes/search?q=x&take=99999",
+          "status": 200,
+          "response": []
+        },
+        {
+          "request": "DELETE /api/ado/notes/15",
+          "status": 204
+        }
+      ]
+    },
+    {
+      "check": "search:orm",
+      "pass": true,
+      "provider": "orm",
+      "found": true,
+      "literalBeatsParameter": true,
+      "clamped": 200,
+      "exchanges": [
+        {
+          "request": "POST /api/orm/notes",
+          "requestBody": {
+            "body": "orm-searchable-1786711784755"
+          },
+          "status": 201,
+          "location": "/api/orm/notes/16",
+          "response": {
+            "id": 16,
+            "body": "orm-searchable-1786711784755",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/orm/notes/search?q=orm-searchable-1786711784755",
+          "status": 200,
+          "response": [
+            {
+              "id": 16,
+              "body": "orm-searchable-1786711784755",
+              "createdAt": "2026-08-14 12:49:44",
+              "updatedAt": "2026-08-14 12:49:44"
+            }
+          ]
+        },
+        {
+          "request": "GET /api/orm/notes/search?q=x&take=99999",
+          "status": 200,
+          "response": []
+        },
+        {
+          "request": "DELETE /api/orm/notes/16",
+          "status": 204
+        }
+      ]
+    },
+    {
+      "check": "bothProvidersSeeOneTable",
+      "pass": true,
+      "id": 17,
+      "body": "crossed-1786711784836",
+      "createdAt": true,
+      "exchanges": [
+        {
+          "request": "POST /api/orm/notes",
+          "requestBody": {
+            "body": "crossed-1786711784836"
+          },
+          "status": 201,
+          "location": "/api/orm/notes/17",
+          "response": {
+            "id": 17,
+            "body": "crossed-1786711784836",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "GET /api/ado/notes/17",
+          "status": 200,
+          "response": {
+            "id": 17,
+            "body": "crossed-1786711784836",
+            "createdAt": "2026-08-14 12:49:44",
+            "updatedAt": "2026-08-14 12:49:44"
+          }
+        },
+        {
+          "request": "DELETE /api/ado/notes/17",
+          "status": 204
+        }
+      ]
+    },
+    {
+      "check": "routerNegatives",
+      "pass": true,
+      "notAnInt": 404,
+      "noSuchRoute": 404,
+      "wrongMethod": 405,
+      "allow": "GET, PUT, DELETE",
+      "exchanges": [
+        {
+          "request": "GET /api/ado/notes/abc",
+          "status": 404
+        },
+        {
+          "request": "GET /api/nope",
+          "status": 404
+        },
+        {
+          "request": "PATCH /api/ado/notes/1",
+          "status": 405,
+          "allow": "GET, PUT, DELETE"
+        }
+      ]
+    },
+    {
+      "check": "binderNegatives",
+      "pass": true,
+      "missingQuery": 400,
+      "emptyBody": 400,
+      "exchanges": [
+        {
+          "request": "GET /api/ado/notes/search",
+          "status": 400
+        },
+        {
+          "request": "POST /api/ado/notes",
+          "requestBody": {
+            "body": "   "
+          },
+          "status": 400,
+          "response": {
+            "title": "One or more validation errors occurred.",
+            "status": 400,
+            "errors": {
+              "body": [
+                "A note body is required."
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
