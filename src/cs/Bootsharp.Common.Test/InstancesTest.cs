@@ -245,9 +245,10 @@ public class InstancesTest
         var imported = new Foo();
         RegisterImport(typeof(IFoo), _ => imported);
         Resolve<IFoo>(101);
-        Assert.False(DisposeImported(101, new Foo()));
+        Assert.Equal(0, DisposeImported(101, new Foo()));
         Assert.Same(imported, Resolve<IFoo>(101));
-        Assert.True(DisposeImported(101, imported));
+        // Both resolves took a reference on the ID, and the owning proxy returns them together.
+        Assert.Equal(2, DisposeImported(101, imported));
     }
 
     [Fact]
@@ -258,13 +259,13 @@ public class InstancesTest
         Action del = proxy.Invoke;
         RegisterImport(typeof(Action), _ => del);
         Resolve<Action>(102);
-        Assert.True(DisposeImported(102, proxy));
+        Assert.Equal(1, DisposeImported(102, proxy));
     }
 
     [Fact]
     public void DisposeImportedIgnoresUnknownIds ()
     {
-        Assert.False(DisposeImported(103, new Foo()));
+        Assert.Equal(0, DisposeImported(103, new Foo()));
     }
 
     [Fact]
@@ -276,7 +277,7 @@ public class InstancesTest
         ResolveTransient(104);
         GC.Collect();
         GC.WaitForPendingFinalizers();
-        Assert.True(DisposeImported(104, new Foo()));
+        Assert.Equal(1, DisposeImported(104, new Foo()));
     }
 
     [Fact]
@@ -286,7 +287,7 @@ public class InstancesTest
         RegisterImport(typeof(IFoo), _ => imported);
         Resolve<IFoo>(105);
         ReleaseImported(105);
-        Assert.False(DisposeImported(105, imported));
+        Assert.Equal(0, DisposeImported(105, imported));
     }
 
     [Fact]
@@ -311,6 +312,67 @@ public class InstancesTest
         RegisterImport(typeof(IFoo), _ => new Foo());
         Assert.NotSame(imported, Resolve<IFoo>(107));
         DisposeImported(107);
+    }
+
+    /// <summary>
+    /// The shared-ID disposal hazard: one JavaScript object is imported under a
+    /// single ID however many times it is handed over, while the C# proxy over it is transient. A
+    /// hand-off arriving after the previous proxy was collected — but before its finalizer ran
+    /// has to yield a working proxy on that same ID instead of tripping over the cleared weak
+    /// reference, and the revived proxy inherits the references the collected one took.
+    /// </summary>
+    [Fact]
+    public void ResolvingImportWhoseProxyWasCollectedRevivesTheRegistration ()
+    {
+        RegisterImport(typeof(IFoo), _ => new Foo());
+        ResolveTransient(108);
+        GC.Collect();
+        var revived = Resolve<IFoo>(108);
+        Assert.NotNull(revived);
+        // The finalizer of the collected proxy finds the ID taken over and releases nothing,
+        // so the hand-off that revived it keeps the ID valid on the JavaScript side.
+        Assert.Equal(0, DisposeImported(108, new Foo()));
+        Assert.Equal(2, DisposeImported(108, revived));
+    }
+
+    /// <summary>
+    /// A single proxy serves every hand-off of the same ID, so it has to give back all of their
+    /// references at once: fewer would leak the JavaScript registration, more would invalidate the
+    /// ID for a hand-off that is still in flight.
+    /// </summary>
+    [Fact]
+    public void DisposalReturnsEveryReferenceTakenForTheId ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(109);
+        Resolve<IFoo>(109);
+        Resolve<IFoo>(109);
+        Assert.Equal(3, DisposeImported(109, imported));
+    }
+
+    /// <summary>
+    /// An event raiser invokes a member on an ID JavaScript already holds, without importing it
+    /// again; borrowing must not take a reference JavaScript never handed over.
+    /// </summary>
+    [Fact]
+    public void BorrowingImportTakesNoReference ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(110);
+        Assert.Same(imported, Imported<IFoo>(110));
+        Assert.Same(imported, Imported<IFoo>(110));
+        Assert.Equal(1, DisposeImported(110, imported));
+    }
+
+    [Fact]
+    public void BorrowingUnregisteredImportTakesNoReferenceEither ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Assert.Same(imported, Imported<IFoo>(111));
+        Assert.Equal(0, DisposeImported(111, imported));
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

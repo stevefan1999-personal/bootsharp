@@ -19,7 +19,17 @@ public static class Instances
     /// <returns>The callback to invoke when disposing the instance.</returns>
     public delegate Action ExportCallback (int id, object it);
 
-    private static readonly Dictionary<int, WeakReference> importedById = [];
+    // A registry ID is shared by every hand-off of the same JavaScript object, while the C# proxy
+    // over it is transient: it may be collected and resolved anew many times over the ID's life.
+    // Refs counts the hand-offs this side has taken, so a dying proxy returns exactly those and
+    // never invalidates an ID that JavaScript has already handed over again (see DisposeImported).
+    private sealed class Import
+    {
+        public readonly WeakReference Proxy = new(null!);
+        public int Refs;
+    }
+
+    private static readonly Dictionary<int, Import> importedById = [];
     private static readonly Dictionary<Type, Func<int, object>> importers = [];
     private static readonly Dictionary<Type, (Func<object, object>? spec, ExportCallback? cb)> exporters = [];
     private static readonly Dictionary<int, object> exportedById = [];
@@ -32,15 +42,32 @@ public static class Instances
     /// <summary>
     /// Resolves a registered instance associated with the specified ID, or uses a factory that
     /// was registered with <see cref="RegisterImport"/> to register a new imported instance.
+    /// Takes a reference on the ID: the JavaScript side hands one over per <c>import</c> call and
+    /// expects it back when the proxy is disposed (<see cref="DisposeImported(int,object)"/>).
     /// </summary>
-    public static T? Resolve<T> (int id)
+    public static T? Resolve<T> (int id) => Resolve<T>(id, retain: true);
+
+    /// <summary>
+    /// Returns the registered proxy of an imported instance associated with the specified ID,
+    /// without taking a reference on it. The counterpart of <see cref="Exported{T}"/>, for the
+    /// direction where JavaScript invokes a member on an ID it already holds — an event raiser —
+    /// rather than handing the ID over.
+    /// </summary>
+    public static T Imported<T> (int id) => Resolve<T>(id, retain: false)!;
+
+    private static T? Resolve<T> (int id, bool retain)
     {
         if (id == 0) return default;
         if (id < 0) return UnwrapExport(exportedById[id]);
-        if (importedById.GetValueOrDefault(id) is { } weak) return UnwrapImport(weak.Target!);
-        var it = importers[typeof(T)](id);
-        importedById[id] = new(it);
-        return UnwrapImport(it);
+        if (!importedById.TryGetValue(id, out var import))
+            importedById[id] = import = new();
+        // The previous proxy may have been collected while JavaScript still has the ID registered:
+        // its finalizer either has not run yet or will find the ID taken over. Either way the fresh
+        // proxy inherits the references the collected one took, and the ID stays valid.
+        var proxy = import.Proxy.Target;
+        if (proxy is null) import.Proxy.Target = proxy = importers[typeof(T)](id);
+        if (retain) import.Refs++;
+        return UnwrapImport(proxy);
 
         static T UnwrapImport (object o) => o is T t ? t : (T)((SpecializedImport)o).Unwrap();
         static T UnwrapExport (object o) => o is T t ? t : (T)((SpecializedExport)o)._it;
@@ -165,15 +192,23 @@ public static class Instances
     /// (see <see cref="ReleaseImported"/>) may already have been recycled to another instance, whose
     /// registration a stale finalizer must not evict.
     /// </summary>
+    /// <remarks>
+    /// The returned count is the number of references <see cref="Resolve{T}(int)"/> took on the ID,
+    /// which the JavaScript side has to get back in one go: the same ID is handed over once per
+    /// <c>import</c> of the same object, while a single proxy serves all of those hand-offs. Giving
+    /// back only one would leak the registration; giving back more than were taken would invalidate
+    /// the ID for a hand-off that is still in flight.
+    /// </remarks>
     /// <param name="id">The unique identifier of the disposed instance.</param>
     /// <param name="proxy">The binding proxy being finalized or disposed.</param>
-    /// <returns>Whether the instance was untracked and the JavaScript side should be notified.</returns>
-    public static bool DisposeImported (int id, object proxy)
+    /// <returns>The number of references to release on the JavaScript side; zero when the proxy no
+    /// longer owns the ID, in which case JavaScript must not be notified at all.</returns>
+    public static int DisposeImported (int id, object proxy)
     {
-        if (importedById.GetValueOrDefault(id) is not { } weak) return false;
-        if (!Owns(weak.Target, proxy)) return false;
+        if (!importedById.TryGetValue(id, out var import)) return 0;
+        if (!Owns(import.Proxy.Target, proxy)) return 0;
         importedById.Remove(id);
-        return true;
+        return import.Refs;
 
         static bool Owns (object? registered, object proxy)
         {

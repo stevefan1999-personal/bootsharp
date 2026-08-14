@@ -7,6 +7,7 @@ const exportedFinalizer = new FinalizationRegistry(finalizeExported);
 const exportedById = new Map<number, WeakRef<object>>();
 const importedById = new Map<number, object>();
 const idByImported = new Map<object, number>();
+const refsById = new Map<number, number>();
 const onDisposeById = new Map<number, () => void>();
 const idPool = new Array<number>();
 const exempted = new WeakSet<object>();
@@ -37,16 +38,22 @@ export const instances = {
         exportedById.delete(id);
     },
     /** Registers specified imported (JS) instance and returns the associated unique ID.
-     *  Short-circuits already registered imported and exported instances. */
+     *  Short-circuits already registered imported and exported instances.
+     *  Each call hands one reference on the ID to the C# side, which returns them all when the
+     *  proxy over the instance is disposed; the ID stays valid until every reference is back. */
     import(instance?: object, cb?: (id: number) => () => void): number {
         if (instance == null) return 0;
         const exportedId = (instance as { _id: number })?._id;
         if (exportedId !== undefined) return exportedId;
         const importedId = idByImported.get(instance);
-        if (importedId !== undefined) return importedId;
+        if (importedId !== undefined) {
+            refsById.set(importedId, refsById.get(importedId)! + 1);
+            return importedId;
+        }
         const id = idPool.length > 0 ? idPool.pop()! : nextId++;
         importedById.set(id, instance);
         idByImported.set(instance, id);
+        refsById.set(id, 1);
         if (cb != null) onDisposeById.set(id, cb(id));
         // Only freshly allocated IDs are tracked, so an instance imported before the current scope
         // opened (eg, an isolate-lived one memoized on the host) is never swept by a later scope.
@@ -78,9 +85,16 @@ export const instances = {
     },
     /** Invoked from C# to notify that the imported (JS -> C#) instance is no longer used
      *  (eg, was garbage collected) and can be released on the JavaScript side as well.
-     *  @param id Unique identifier of the disposed instance. */
-    disposeImported(id: number): void {
-        if (evict(id)) recycle(id);
+     *  The proxy gives back every reference it took and the instance is evicted only when the last
+     *  one is back: a single JavaScript object is imported under one ID however many times it is
+     *  handed over, while the proxy over it is transient, so a proxy dying while another hand-off
+     *  of the same ID is in flight must not invalidate the ID for the survivor.
+     *  @param id Unique identifier of the disposed instance.
+     *  @param refs Number of references to release; one, unless specified otherwise. */
+    disposeImported(id: number, refs = 1): void {
+        const remaining = (refsById.get(id) ?? 0) - refs;
+        if (remaining > 0) refsById.set(id, remaining);
+        else if (evict(id)) recycle(id);
     },
     /** Releases an imported instance at the end of the invocation scope that registered it.
      *  Evicts the C# proxy as well, but without routing back through the C#-initiated
@@ -101,6 +115,7 @@ function evict(id: number): boolean {
     if (instance === undefined) return false;
     idByImported.delete(instance);
     importedById.delete(id);
+    refsById.delete(id);
     onDisposeById.get(id)?.();
     onDisposeById.delete(id);
     return true;

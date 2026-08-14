@@ -89,7 +89,9 @@ internal sealed class CSInteropGenerator
         var name = $"{id}_Invoke{evt.Name}";
         var args = string.Join(", ", evt.Args.Select(a => BuildParameter(a.Value, a.Name)));
         if (isIt) args = $"int {PrependIdArg(args)}";
-        var invName = isIt ? $"(({stx})Instances.Resolve<{key}>(_id)).Invoke{evt.Name}"
+        // The instance ID is borrowed, not handed over: JavaScript raises the event on an ID it
+        // already holds, without importing it again, so resolving it must not take a reference.
+        var invName = isIt ? $"(({stx})Instances.Imported<{key}>(_id)).Invoke{evt.Name}"
             : isMd ? $"(({stx})Modules.Imports[typeof({key})].Instance).Invoke{evt.Name}"
             : $"{stx}.Bootsharp_Invoke_{evt.Name}";
         var invArgs = string.Join(", ", evt.Args.Select(ImportCS));

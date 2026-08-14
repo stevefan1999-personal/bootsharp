@@ -103,6 +103,44 @@ describe("while bootsharp is booted", () => {
         expect(instances.import(new Instanced("first"))).not.toStrictEqual(instances.import(new Instanced("second")));
     });
 
+    // The shared-ID disposal hazard: one JavaScript object is imported under a single
+    // ID however many times it is handed over, while the C# proxy carrying that ID is transient
+    // collected and resolved anew as the app keeps re-reading the property it comes from. The first
+    // proxy to die must not evict the ID out from under a hand-off that is still in flight.
+    it("an imported instance survives disposal while another reference is outstanding", () => {
+        const instance = new Instanced("shared");
+        const id = instances.import(instance);
+        expect(instances.import(instance)).toStrictEqual(id);
+        instances.disposeImported(id);
+        expect(instances.imported(id)).toBe(instance);
+        instances.disposeImported(id);
+        expect(instances.imported(id)).toBeUndefined();
+    });
+
+    // A single C# proxy serves every hand-off of its ID, so it returns all of their references at
+    // once when it's disposed; this is the shape the generated disposal notification uses.
+    it("a disposal releases every reference the proxy took", () => {
+        const instance = new Instanced("batched");
+        const id = instances.import(instance);
+        instances.import(instance);
+        instances.import(instance);
+        instances.disposeImported(id, 2);
+        expect(instances.imported(id)).toBe(instance);
+        instances.disposeImported(id, 1);
+        expect(instances.imported(id)).toBeUndefined();
+    });
+
+    it("hand-offs through the generated import path are counted", () => {
+        const instance = new Instanced("counted");
+        expect(Modules.getInstanceArg(<never>instance)).toStrictEqual("counted");
+        expect(Modules.getInstanceArg(<never>instance)).toStrictEqual("counted");
+        const id = instances.import(instance);
+        instances.disposeImported(id, 2);
+        expect(instances.imported(id)).toBe(instance);
+        instances.disposeImported(id);
+        expect(instances.imported(id)).toBeUndefined();
+    });
+
     // The export direction of the same problem: C# hands JavaScript a callback for the duration of
     // one host call, and only C# knows when it is done with. Releasing drops the proxy here, so the
     // registry does not grow by one entry per call for the life of the isolate.

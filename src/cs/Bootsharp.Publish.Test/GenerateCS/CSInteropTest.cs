@@ -310,7 +310,9 @@ public class CSInteropTest : GenerateCSTest
             """));
         Execute();
         Contains("""[JSImport("IExported.broadcastChangedSerialized", "index")] internal static partial void JS_Export_IExported_BroadcastChanged_Serialized (int _id, [JSMarshalAs<JSType.BigInt>] long arg1, int arg2);""");
-        Contains("[JSExport] internal static void JS_Import_IImported_InvokeChanged (int _id, [JSMarshalAs<JSType.BigInt>] long arg1, int arg2) => ((global::Bootsharp.Generated.JS_Import_IImported)Instances.Resolve<global::IImported>(_id)).InvokeChanged(Serializer.Deserialize(arg1, SerializerContext.Record), Instances.Resolve<global::IImported>(arg2));");
+        // The instance ID is borrowed (Imported), while the instanced argument is a hand-off from a
+        // JavaScript import and hence takes a reference on its own ID (Resolve).
+        Contains("[JSExport] internal static void JS_Import_IImported_InvokeChanged (int _id, [JSMarshalAs<JSType.BigInt>] long arg1, int arg2) => ((global::Bootsharp.Generated.JS_Import_IImported)Instances.Imported<global::IImported>(_id)).InvokeChanged(Serializer.Deserialize(arg1, SerializerContext.Record), Instances.Resolve<global::IImported>(arg2));");
     }
 
     [Fact]

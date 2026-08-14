@@ -41,10 +41,10 @@ public class CSInstanceTest : GenerateCSTest
                 internal void InvokeOnSomethingChanged () => OnSomethingChanged?.Invoke();
                 global::Record? global::IImported.Record
                 {
-                    get => global::Bootsharp.Generated.Interop.JS_Import_IImported_GetRecord(_id);
-                    set => global::Bootsharp.Generated.Interop.JS_Import_IImported_SetRecord(_id, value);
+                    get => Alive(global::Bootsharp.Generated.Interop.JS_Import_IImported_GetRecord(_id));
+                    set { global::Bootsharp.Generated.Interop.JS_Import_IImported_SetRecord(_id, value); Alive(); }
                 }
-                void global::IImported.Fun (global::System.String arg) => global::Bootsharp.Generated.Interop.JS_Import_IImported_Fun(_id, arg);
+                void global::IImported.Fun (global::System.String arg) { global::Bootsharp.Generated.Interop.JS_Import_IImported_Fun(_id, arg); Alive(); }
             }
             """);
     }
@@ -185,7 +185,7 @@ public class CSInstanceTest : GenerateCSTest
             {
                 ~JS_Import_System_Action() => Instances.DisposeImported(_id, this);
 
-                public void Invoke () => global::Bootsharp.Generated.Interop.JS_Import_System_Action_Invoke(_id);
+                public void Invoke () { global::Bootsharp.Generated.Interop.JS_Import_System_Action_Invoke(_id); Alive(); }
             }
             """);
         Contains(
@@ -194,7 +194,7 @@ public class CSInstanceTest : GenerateCSTest
             {
                 ~JS_Import_System_Func_Of_System_Int32_And_System_String() => Instances.DisposeImported(_id, this);
 
-                public global::System.String Invoke (global::System.Int32 arg) => global::Bootsharp.Generated.Interop.JS_Import_System_Func_Of_System_Int32_And_System_String_Invoke(_id, arg);
+                public global::System.String Invoke (global::System.Int32 arg) => Alive(global::Bootsharp.Generated.Interop.JS_Import_System_Func_Of_System_Int32_And_System_String_Invoke(_id, arg));
             }
             """);
         Contains(
@@ -203,7 +203,7 @@ public class CSInstanceTest : GenerateCSTest
             {
                 ~JS_Import_Notify() => Instances.DisposeImported(_id, this);
 
-                public void Invoke (global::System.String msg) => global::Bootsharp.Generated.Interop.JS_Import_Notify_Invoke(_id, msg);
+                public void Invoke (global::System.String msg) { global::Bootsharp.Generated.Interop.JS_Import_Notify_Invoke(_id, msg); Alive(); }
             }
             """);
     }
@@ -261,10 +261,10 @@ public class CSInstanceTest : GenerateCSTest
                 internal void InvokeAddedEvent () => AddedEvent?.Invoke();
                 public override global::System.String AddedProperty
                 {
-                    get => global::Bootsharp.Generated.Interop.JS_Import_Custom_GetAddedProperty(_id);
-                    set => global::Bootsharp.Generated.Interop.JS_Import_Custom_SetAddedProperty(_id, value);
+                    get => Alive(global::Bootsharp.Generated.Interop.JS_Import_Custom_GetAddedProperty(_id));
+                    set { global::Bootsharp.Generated.Interop.JS_Import_Custom_SetAddedProperty(_id, value); Alive(); }
                 }
-                public override global::System.String AddedMethod () => global::Bootsharp.Generated.Interop.JS_Import_Custom_AddedMethod(_id);
+                public override global::System.String AddedMethod () => Alive(global::Bootsharp.Generated.Interop.JS_Import_Custom_AddedMethod(_id));
             }
             """);
         Contains(
@@ -479,8 +479,63 @@ public class CSInstanceTest : GenerateCSTest
         Contains("~JS_Import_IOpaque() => Instances.DisposeImported(_id, this);");
         Contains("~JS_Import_System_Action() => Instances.DisposeImported(_id, this);");
         Contains("~JS_Import_System_Threading_CancellationToken() => Instances.DisposeImported(_id, this);");
-        Contains("if (Bootsharp.Instances.DisposeImported(id, proxy)) NotifyImportedDisposed(id);");
+        Contains("var refs = Bootsharp.Instances.DisposeImported(id, proxy);");
+        Contains("if (refs > 0) NotifyImportedDisposed(id, refs);");
         Contains("[JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);");
+    }
+
+    /// <summary>
+    /// The ID crosses the boundary as a bare integer, so reading it is the proxy's last use and the
+    /// collector is free to finalize the proxy from there on — releasing the ID on the JavaScript
+    /// side before the call carrying it is made, which lands the call on an instance the registry no
+    /// longer resolves. Every member therefore keeps the proxy alive across its interop call; this
+    /// is what the Durable Object storage path in the interleave harness measured.
+    /// </summary>
+    [Fact]
+    public void MembersKeepProxyAliveAcrossTheInteropCall ()
+    {
+        AddAssembly(With(
+            """
+            public interface IImported
+            {
+                string Value { get; set; }
+                void Fun ();
+                Task<string> Get (string key);
+            }
+
+            public class Class
+            {
+                [Import] public static IImported GetImported () => default!;
+            }
+            """));
+        Execute();
+        Contains("get => Alive(global::Bootsharp.Generated.Interop.JS_Import_IImported_GetValue(_id));");
+        Contains("set { global::Bootsharp.Generated.Interop.JS_Import_IImported_SetValue(_id, value); Alive(); }");
+        Contains("void global::IImported.Fun () { global::Bootsharp.Generated.Interop.JS_Import_IImported_Fun(_id); Alive(); }");
+        Contains("Get (global::System.String key) => Alive(global::Bootsharp.Generated.Interop.JS_Import_IImported_Get(_id, key));");
+    }
+
+    /// <summary>
+    /// A proxy is transient while the ID it carries is shared by every hand-off of the same
+    /// JavaScript object, so the registry cannot release the ID on the first proxy that dies: the
+    /// disposal notification carries the number of references the dying proxy took, and JavaScript
+    /// evicts the ID only when the last one is back.
+    /// </summary>
+    [Fact]
+    public void DisposalNotificationCarriesReleasedReferenceCount ()
+    {
+        AddAssembly(With(
+            """
+            public interface IOpaque;
+
+            public class Class
+            {
+                [Import] public static IOpaque GetOpaque () => default!;
+            }
+            """));
+        Execute();
+        Contains("""[JSImport("instances.disposeImported", "Bootsharp")] private static partial void NotifyImportedDisposed (int id, int refs);""");
+        Contains("internal static T Imported<T> (int id) => Bootsharp.Instances.Imported<T>(id);");
     }
 
     /// <summary>

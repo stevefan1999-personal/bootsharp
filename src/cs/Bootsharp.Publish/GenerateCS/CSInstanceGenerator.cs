@@ -23,10 +23,12 @@ internal sealed class CSInstanceGenerator
               internal static int Export<T> (T? it) => Bootsharp.Instances.Export(it);
               internal static T Exported<T> (int id) where T : class => Bootsharp.Instances.Exported<T>(id);
               internal static T? Resolve<T> (int id) => Bootsharp.Instances.Resolve<T>(id);
+              internal static T Imported<T> (int id) => Bootsharp.Instances.Imported<T>(id);
 
               internal static void DisposeImported (int id, object proxy)
               {
-                  if (Bootsharp.Instances.DisposeImported(id, proxy)) NotifyImportedDisposed(id);
+                  var refs = Bootsharp.Instances.DisposeImported(id, proxy);
+                  if (refs > 0) NotifyImportedDisposed(id, refs);
               }
 
               [ModuleInitializer]
@@ -44,7 +46,7 @@ internal sealed class CSInstanceGenerator
 
               [JSExport] private static void DisposeExported (int id) => Bootsharp.Instances.DisposeExported(id);
               [JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);
-              [JSImport("instances.disposeImported", "Bootsharp")] private static partial void NotifyImportedDisposed (int id);
+              [JSImport("instances.disposeImported", "Bootsharp")] private static partial void NotifyImportedDisposed (int id, int refs);
               [JSImport("instances.releaseExported", "Bootsharp")] private static partial void NotifyExportedReleased (int id);
           }
 
@@ -133,7 +135,7 @@ internal sealed class CSInstanceGenerator
               {
                   ~{{del.Proxy.Id}}() => Instances.DisposeImported(_id, this);
 
-                  public {{inv.Return.TypeSyntax}} Invoke ({{args}}) => {{fn}}({{callArgs}});
+                  public {{inv.Return.TypeSyntax}} Invoke ({{args}}) {{Alive(inv.Void, $"{fn}({callArgs})")}}
               }
               """;
     }
@@ -168,8 +170,8 @@ internal sealed class CSInstanceGenerator
               {{head}}
               {
                   {{Fmt(
-                      prop.CanGet ? $"get => {space}_Get{prop.Name}({getArgs});" : null,
-                      prop.CanSet ? $"set => {space}_Set{prop.Name}({setArgs});" : null
+                      prop.CanGet ? $"get {Alive(false, $"{space}_Get{prop.Name}({getArgs})")}" : null,
+                      prop.CanSet ? $"set {Alive(true, $"{space}_Set{prop.Name}({setArgs})")}" : null
                   )}}
               }
               """;
@@ -183,6 +185,12 @@ internal sealed class CSInstanceGenerator
         var sig = it.Proxy is SpecializedProxy
             ? $"public override {method.Return.TypeSyntax} {method.Name}"
             : $"{method.Return.TypeSyntax} {it.Syntax}.{method.Name}";
-        return $"{sig} ({args}) => global::Bootsharp.Generated.Interop.{name}({callArgs});";
+        return $"{sig} ({args}) {Alive(method.Void, $"global::Bootsharp.Generated.Interop.{name}({callArgs})")}";
     }
+
+    // The ID crosses as a bare integer, so the read of _id is the proxy's last use and the collector
+    // may finalize it — releasing the ID on the JavaScript side — before the call carrying that ID
+    // is made. Every member keeps the proxy alive across its interop call.
+    private static string Alive (bool isVoid, string call) =>
+        isVoid ? $"{{ {call}; Alive(); }}" : $"=> Alive({call});";
 }
