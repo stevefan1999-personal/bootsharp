@@ -1,3 +1,4 @@
+global using Bootsharp;
 global using Bootsharp.Cloudflare;
 
 // The worker context is generic over the app's env (the library cannot name it), and every call

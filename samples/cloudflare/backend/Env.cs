@@ -27,6 +27,7 @@ public interface ICloudflareEnv
 /// Generics cannot cross Bootsharp instance imports, so the stub type is explicit.
 /// JS <c>newUniqueId</c> / <c>idFromName</c> / <c>idFromString</c> / <c>get</c> / <c>getByName</c>.
 /// </summary>
+[JSHandle(Scope = HandleScope.Isolate)]
 public interface ICounterNamespace
 {
     DurableObjectId NewUniqueId();
@@ -41,8 +42,8 @@ public interface ICounterStub
 {
     string Id { get; }
     string? Name { get; }
-    Task<RpcInt> Get();
-    Task<RpcInt> Increment();
+    Task<int> Get();
+    Task<int> Increment();
     /// <summary>Typed DO SQLite transport: create/insert/count on a ticks table.</summary>
     Task<string> SqlDemo();
 }

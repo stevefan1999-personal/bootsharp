@@ -173,13 +173,13 @@ documented but not encoded in tooling.
 
 | Variant | wasm raw | wasm gzip | notes |
 | --- | --- | --- | --- |
-| full sample | 8,710,087 | 3,081,467 | bundle gzip **3,294,218 — 145 KB over the free ceiling**; paid plan required |
+| full sample | 8,709,761 | 3,082,089 | bundle gzip **3,293,511 — 144 KB over the free ceiling**; paid plan required |
 | without FreeSql | 2,044,672 | 786,564 | the ORM costs 75% of the binary |
 | without data layer | 2,044,672 | 786,565 | ADO/D1 layer itself is free — FreeSql is the entire cost |
 | without SSR page | 8,679,009 | 3,064,400 | SSR is ~17 KB |
-| lean baseline | 1,576,755 | 631,232 | [`samples/cloudflare-minimal`](../cloudflare-minimal) as shipped — fetch + KV + structured logging, no DI container: bundle gzip **758,927**, the figure ADR-0007 budgets every layer against (it supersedes the 1,708,820 / 668,170 "fetch-only floor" estimated before the sample existed) |
+| lean baseline | 1,598,716 | 638,446 | [`samples/cloudflare-minimal`](../cloudflare-minimal) as shipped — fetch + KV + structured logging, no DI container: bundle gzip **766,914**, the figure ADR-0007 budgets every layer against (it supersedes the 1,708,820 / 668,170 "fetch-only floor" estimated before the sample existed) |
 
-Startup CPU is a non-issue: `wrangler check startup` profiles **9.7 ms active** against the
+Startup CPU is a non-issue: `wrangler check startup` profiles **15.1 ms active** against the
 400 ms budget, because boot is lazy — the isolate startup phase only evaluates the JS shim,
 and .NET instantiation happens inside the first request.
 

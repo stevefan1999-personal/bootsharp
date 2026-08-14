@@ -12,21 +12,28 @@ Two jobs:
    against — ADR-0007 prices size against the lean core, not against the FreeSql demo next door in
    [`samples/cloudflare`](../cloudflare).
 
-## Measured (2026-08-14)
+## Measured (2026-08-14, milestone 0b)
 
 The authoritative metric is the deployable **bundle gzip** from `wrangler check startup` — wasm
 plus the JS glue — not the wasm file alone (ADR-0006 §5).
 
 | | wasm raw | wasm gzip | bundle gzip | vs. free-plan ceiling |
 | --- | --- | --- | --- | --- |
-| this sample | 1,576,755 | 631,232 | **758,927** (741.14 KiB) | 2,386,801 B of headroom |
+| this sample | 1,598,716 | 638,446 | **766,914** (748.94 KiB) | 2,378,814 B of headroom |
 | free-plan ceiling | | | 3,145,728 | enforced (API error 10027) |
-| [`samples/cloudflare`](../cloudflare) | 8,710,087 | 3,081,467 | 3,294,218 | 148,490 over — paid plan, because of FreeSql |
+| [`samples/cloudflare`](../cloudflare) | 8,709,761 | 3,082,089 | 3,293,511 | 147,783 over — paid plan, because of FreeSql |
 
-Startup: 10.6 ms active against the 400 ms budget. Boot is lazy — the isolate startup phase only
+Startup: 10.7 ms active against the 400 ms budget. Boot is lazy — the isolate startup phase only
 evaluates the JS shim; .NET is instantiated inside the first request.
 
-Reproduce with `npm run size` (`wrangler check startup`), after a publish.
+Reproduce with `npm run size` (`wrangler check startup`), after a publish. wasm gzip is
+`gzip -9`, which is what the bundler uses.
+
+Milestone 0b (ADR-0002 Tier-1: awaited primitive imports, the handle category, per-invocation
+handle scopes) moved this sample by **+7,987 B of bundle gzip**, essentially all of it wasm
+(+7,214 B wasm gzip): deterministic release adds `IDisposable` to the generated import proxies
+and two members to `Bootsharp.Instances`. The full sample moved the other way (-696 B) because
+deleting the `RpcInt` box also deletes its generated serializer, which this sample never had.
 
 ## The whole app
 

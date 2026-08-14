@@ -5,6 +5,9 @@
   // and the Bootsharp ES modules it imports. `npm run dev` and `npm run deploy` publish first.
   "main": "dist/worker/entrypoints.ts",
   "compatibility_date": "2026-08-13",
+  // Required by Bootsharp.Cloudflare, not optional: js/runtime.mjs imports AsyncLocalStorage
+  // from node:async_hooks to scope handles per logical invocation. nodejs_als
+  // alone is enough for that import; nodejs_compat is the superset and what.NET wants anyway.
   "compatibility_flags": ["nodejs_compat"],
   // No account_id on purpose: `wrangler dev --local` needs none, and `wrangler deploy` takes the
   // account from `wrangler login`. Add yours only if your credentials reach more than one account.

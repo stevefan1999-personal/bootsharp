@@ -5,6 +5,9 @@
   // Bootsharp ES modules it imports. `npm run dev` and `npm run deploy` publish first.
   "main": "dist/worker/entrypoints.ts",
   "compatibility_date": "2026-08-13",
+  // Required by Bootsharp.Cloudflare, not optional: js/runtime.mjs imports AsyncLocalStorage
+  // from node:async_hooks to scope handles per logical invocation. nodejs_als
+  // alone is enough for that import; nodejs_compat is the superset and what.NET wants anyway.
   "compatibility_flags": ["nodejs_compat"],
   "account_id": "bb69253f02c5edc7125c285387b47388",
   "workers_dev": true,

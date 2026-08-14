@@ -101,13 +101,13 @@ public sealed class SiteService(ILogger<SiteService> logger)
 
     public async Task<IResult> GetCounter(HttpContext ctx)
     {
-        var n = (await counter.GetByName("global").Get()).Value;
+        var n = await counter.GetByName("global").Get();
         return Results.Json("{\"name\":\"global\",\"value\":" + n + "}");
     }
 
     public async Task<IResult> IncrementCounter(HttpContext ctx)
     {
-        var n = (await counter.GetByName("global").Increment()).Value;
+        var n = await counter.GetByName("global").Increment();
         return SeeHome("do-incremented-" + n);
     }
 
@@ -166,7 +166,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
             r2List = "[" + string.Join(",", listed.Objects.Select(o => "{\"key\":\"" + Json.Escape(o.Key) + "\",\"size\":" + o.Size + "}")) + "]";
         }
         catch (Exception ex) { loadError = Join(loadError, "r2: " + ex.Message); }
-        try { n = (await counter.GetByName("global").Get()).Value; } catch (Exception ex) { loadError = Join(loadError, "do: " + ex.Message); }
+        try { n = await counter.GetByName("global").Get(); } catch (Exception ex) { loadError = Join(loadError, "do: " + ex.Message); }
         return new HomeModel
         {
             Runtime = ".NET " + Environment.Version,
