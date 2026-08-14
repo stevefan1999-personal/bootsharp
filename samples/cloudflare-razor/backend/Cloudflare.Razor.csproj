@@ -39,8 +39,14 @@
              Razor compiler both ship under analyzers/, and a ProjectReference carries no such payload.
              Nothing from it reaches the worker: what the page compiles to is calls on HtmlWriter. -->
         <PackageReference Include="Bootsharp.Cloudflare.Razor" Version="*-*" />
+        <PackageReference Include="FreeSql.Provider.Custom" Version="3.5.311" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <TrimmerRootType Include="FreeSql.Custom.CustomProvider`1" />
+        <TrimmerRootType Include="Cloudflare.Razor.Notes.FreeSqlNote" />
     </ItemGroup>
 
     <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />

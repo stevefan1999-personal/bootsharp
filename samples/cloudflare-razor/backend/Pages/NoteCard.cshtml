@@ -1,0 +1,11 @@
+@using Cloudflare.Razor.Notes
+@model Note
+<article class="note">
+  <p>@Model.Body</p>
+  <footer>
+    <time>@Model.CreatedAt</time>
+    <form method="post" action="/notes/@Model.Id/delete">
+      <button type="submit" class="ghost">Delete</button>
+    </form>
+  </footer>
+</article>

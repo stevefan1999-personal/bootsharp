@@ -13,5 +13,13 @@
   ],
   "vars": {
     "ENVIRONMENT": "production"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bootsharp-cf-razor",
+      "database_id": "d6c4e606-1ade-4aac-9ebc-16eb203ca00e",
+      "migrations_dir": "migrations"
+    }
+  ]
 }

@@ -49,8 +49,15 @@
       font: inherit; color: var(--ink); background: #080c18;
     }
     button { background: var(--accent); border-color: transparent; font-weight: 650; cursor: pointer; }
+    button.ghost { background: transparent; border-color: var(--line); color: var(--muted); font-weight: 500; }
     .hello { font-size: 1.35rem; color: var(--ink); margin: 0 0 .4rem; }
+    .flash { color: var(--ok); margin: 0 0 1rem; }
     .warn { color: var(--bad); }
+    .note { display: flex; flex-direction: column; gap: .4rem; }
+    .note p { margin: 0; color: var(--ink); }
+    .note footer { display: flex; justify-content: space-between; align-items: center; padding: 0; font-size: .8rem; color: var(--muted); }
+    .note form { margin: 0; }
+    .empty { color: var(--muted); }
     footer { padding: 1.5rem; color: var(--muted); font-size: .85rem; }
   </style>
 </head>
@@ -64,28 +71,39 @@
     <div class="pills">
       <span class="pill">@Model.Runtime</span>
       <span class="pill">env @Model.Environment</span>
-      <span class="pill">.cshtml → HtmlWriter</span>
-      <span class="pill">LLVM wasm</span>
+      <span class="pill">.cshtml components</span>
+      <span class="pill">FreeSql + D1</span>
+      <span class="pill">scoped DI</span>
     </div>
   </header>
   <main>
     <article>
       <h2>Say hello</h2>
-@if (Model.Name is { Length: > 0 })
-{
-      <p class="hello">Hello, @Model.Name.</p>
-      <p>Your name was written through the element-content encoder. Markup in the query is escaped, not executed.</p>
-}
-else
-{
-      <p class="hello">Hello, isolate.</p>
-      <p>Pass <code>?name=</code> to bind a query string onto <code>@@model</code> and render it here.</p>
-}
+      @{ Greeting.Render(html, Model.Name); }
       <form method="get" action="/">
         <input name="name" value="@Model.Name" placeholder="your name" maxlength="80"/>
         <button type="submit">Render</button>
       </form>
     </article>
+    <article>
+      <h2>Notes on D1</h2>
+      <p>FreeSql over a scoped D1 connection. The page, the repository and the ORM share one DI scope per request.</p>
+@if (Model.Flash is { Length: > 0 })
+{
+      <p class="flash">@Model.Flash</p>
+}
+      <form method="post" action="/notes">
+        <input name="body" placeholder="write a note" maxlength="280" required/>
+        <button type="submit">Save</button>
+      </form>
+@if (Model.Notes.Count == 0)
+{
+      <p class="empty">No notes yet.</p>
+}
+else
+{
+      foreach (var note in Model.Notes) { NoteCard.Render(html, note); }
+}
     <article>
       <h2>Context-aware encoding</h2>
       <p>A URL-valued attribute uses the URL sink. A <code>javascript:</code> probe is refused rather than escaped into a still-runnable scheme.</p>

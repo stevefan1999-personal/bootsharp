@@ -1,0 +1,11 @@
+@param string? name
+@if (name is { Length: > 0 })
+{
+<p class="hello">Hello, @name.</p>
+<p>Your name was written through the element-content encoder. Markup in the query is escaped, not executed.</p>
+}
+else
+{
+<p class="hello">Hello, isolate.</p>
+<p>Pass <code>?name=</code> to bind a query string and render it through this page component.</p>
+}

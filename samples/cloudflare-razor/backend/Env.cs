@@ -6,5 +6,6 @@ namespace Cloudflare.Razor;
 [WorkerEnv]
 public interface IWorkerEnv
 {
+    ID1Database DB { get; }
     string ENVIRONMENT { get; }
 }

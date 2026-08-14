@@ -1,6 +1,7 @@
 using Bootsharp;
 using Bootsharp.Cloudflare.Logging;
 using Cloudflare.Razor;
+using Cloudflare.Razor.Notes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
@@ -12,15 +13,23 @@ var holder = new AppHolder();
 var builder = WebApplication.CreateSlimBuilder();
 AddJsonLogging(builder.Services);
 builder.Services.ConfigureHttpJsonOptions(options => options.AddContext(ApiJsonContext.Default));
-builder.Services.AddSingleton<PagesService>();
+builder.Services
+    .AddCloudflareEnv()
+    .AddFreeSqlNotes()
+    .AddScoped<PagesService>();
 builder.Services.AddSingleton<IWorker>(provider => new Worker(
     holder.App ?? throw new InvalidOperationException("WebApplication was not built."),
     provider.GetRequiredService<ILogger<Worker>>()));
 
 var app = builder.Build();
 holder.App = app;
-app.MapGet("/", (PagesService pages, string? name, string? probe) => pages.Home(name, probe));
+app.MapGet("/", (PagesService pages, string? name, string? probe, string? flash) =>
+    pages.Home(name, probe, flash));
+app.MapPost("/notes", (PagesService pages, HttpRequest request) => pages.Create(request));
+app.MapPost("/notes/{id:int}/delete", (PagesService pages, int id) => pages.Delete(id));
 app.MapGet("/api/health", (PagesService pages) => pages.Health());
+app.MapGet("/api/notes", (PagesService pages) => pages.ListNotes());
+app.MapPost("/api/notes", (PagesService pages, NoteInput input) => pages.PostNote(input));
 app.Run();
 
 Modules.Exports.Values.Single(module => module.Handler == typeof(IWorker))

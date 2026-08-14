@@ -7,5 +7,3 @@ public interface IWorker
 {
     Task<HttpResponseData> Fetch (IJsRequest request, IWorkerEnv env);
 }
-
-public sealed record Health (bool Ok, string Runtime, string Environment, string Page);

@@ -7,6 +7,8 @@
     "dev": "npm run publish:cs && wrangler dev",
     "deploy": "npm run publish:cs && wrangler deploy",
     "types": "wrangler types",
+    "migrate:local": "wrangler d1 migrations apply bootsharp-cf-razor --local",
+    "migrate:remote": "wrangler d1 migrations apply bootsharp-cf-razor --remote",
     "check:ts": "npm run types && tsc --noEmit -p tsconfig.json",
     "size": "wrangler check startup"
   },

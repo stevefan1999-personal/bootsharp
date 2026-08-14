@@ -1,3 +1,5 @@
+using Cloudflare.Razor.Notes;
+
 namespace Cloudflare.Razor.Pages;
 
 /// <summary>Everything <c>Home.cshtml</c> renders from. An ordinary class — <c>@model</c> is
@@ -8,4 +10,6 @@ public sealed class HomeModel
     public string Environment { get; init; } = "";
     public string? Name { get; init; }
     public string? Probe { get; init; }
+    public string? Flash { get; init; }
+    public IReadOnlyList<Note> Notes { get; init; } = [];
 }
