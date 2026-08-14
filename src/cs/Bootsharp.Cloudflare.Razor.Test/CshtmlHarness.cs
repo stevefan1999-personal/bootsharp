@@ -96,6 +96,22 @@ internal static class CshtmlHarness
         return writer.ToString();
     }
 
+    /// <summary>The C# compiler's view of a generated page, including warnings. Used to pin
+    /// CS8669: generated files are auto-generated, so the project's nullable setting does not
+    /// apply unless the artefact itself turns it back on.</summary>
+    public static ImmutableArray<Diagnostic> Compile (params Page[] pages)
+    {
+        var run = Run(pages);
+        Assert.Empty(run.Diagnostics);
+        var trees = run.Generated.OrderBy(static pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => CSharpSyntaxTree.ParseText(pair.Value, ParseOptions, path: pair.Key));
+        var compilation = CSharpCompilation.Create($"CshtmlGeneratorTests_{Guid.NewGuid():N}", trees, References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+                nullableContextOptions: NullableContextOptions.Enable));
+        using var peStream = new MemoryStream();
+        return compilation.Emit(peStream).Diagnostics;
+    }
+
     /// <summary>Compiles the pages, loads them, and hands back one page's generated type.</summary>
     /// <remarks>The type rather than its output, for the claims that are about the class the page
     /// became — that an <c>@attribute</c> landed on it, what <c>Render</c>'s signature is — which are
@@ -117,8 +133,9 @@ internal static class CshtmlHarness
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
                     nullableContextOptions: NullableContextOptions.Enable));
             var result = compilation.Emit(path);
-            Assert.True(result.Success, string.Join(Environment.NewLine,
-                result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)));
+            var failures = result.Diagnostics.Where(static d =>
+                d.Severity == DiagnosticSeverity.Error || d.Id == "CS8669");
+            Assert.True(result.Success && !failures.Any(), string.Join(Environment.NewLine, failures));
             return Assembly.LoadFrom(path).GetType(page)
                 ?? throw new InvalidOperationException($"{page} is not in the emitted assembly.");
         }

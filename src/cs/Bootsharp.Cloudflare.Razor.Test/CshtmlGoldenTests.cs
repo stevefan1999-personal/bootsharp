@@ -50,6 +50,7 @@ public class CshtmlGoldenTests
         namespace App.Views
         {
             #line hidden
+            #nullable enable
             using Bootsharp.Cloudflare.AspNetCore.Html;
             public static partial class Home
             {

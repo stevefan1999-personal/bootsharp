@@ -167,6 +167,29 @@ public class CshtmlCompilationTests
         Assert.Equal("<ul><li>a</li><li>b</li></ul>", html.Trim());
     }
 
+    /// <summary>
+    /// Generated files carry <c>// &lt;auto-generated/&gt;</c>, which turns the project's
+    /// <c>&lt;Nullable&gt;enable&lt;/Nullable&gt;</c> off. Without <c>#nullable enable</c> in the
+    /// artefact, <c>@param string?</c> and <c>@model Foo?</c> are CS8669 pointing at a file the
+    /// author did not write. The sample dodges it only because <c>Home.cshtml</c> uses a non-nullable
+    /// <c>@model</c>.
+    /// </summary>
+    [Fact]
+    public void EnablesNullableAnnotationsOnGeneratedPages ()
+    {
+        var page = new Page("Views/Home.cshtml", """
+            @model string?
+            @param string? foo
+            <p>@foo</p>
+            """);
+        var run = CshtmlHarness.Run(page);
+        Assert.Empty(run.Diagnostics);
+        Assert.Contains("#nullable enable", run.Emitted);
+        Assert.Contains("string? Model", run.Code);
+        Assert.Contains("string? foo", run.Code);
+        Assert.DoesNotContain("CS8669", CshtmlHarness.Compile(page).Select(static d => d.Id));
+    }
+
     /// <summary>A page maps back to its own source, so a C# error inside a hole reports at the line
     /// the author wrote it on rather than somewhere in generated code.</summary>
     [Fact]
