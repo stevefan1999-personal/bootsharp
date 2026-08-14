@@ -6,6 +6,14 @@ if [ ! -f .llvm/microsoft.dotnet.ilcompiler.llvm/build/Microsoft.DotNet.ILCompil
   exit 1
 fi
 
+# Bootsharp packs ../../src/js/dist as its js/ payload. Without it the package still builds and
+# still restores — it just publishes an app with no ES modules, which fails much later (or not at
+# all, when a stale dist/ from a previous toolchain is still lying around). Fail here instead.
+if [ ! -f ../js/dist/index.mjs ]; then
+  echo "Bootsharp ES modules are not built. Run 'npm install && npm run build' in src/js." >&2
+  exit 1
+fi
+
 mkdir -p .nuget
 dotnet build Bootsharp.Generate -c Release
 dotnet build Bootsharp.Cloudflare.Generate -c Release

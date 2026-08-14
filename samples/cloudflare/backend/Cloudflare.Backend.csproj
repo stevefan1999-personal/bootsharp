@@ -49,8 +49,10 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Bootsharp" Version="0.9.0" />
-        <PackageReference Include="Bootsharp.Inject" Version="0.9.0" />
+        <!-- Floating onto the locally packed toolchain (nuget.config maps Bootsharp* to
+             src/cs/.nuget), the convention every other in-repo sample follows. -->
+        <PackageReference Include="Bootsharp" Version="*-*" />
+        <PackageReference Include="Bootsharp.Inject" Version="*-*" />
         <PackageReference Include="FreeSql.Provider.Custom" Version="3.5.311" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />

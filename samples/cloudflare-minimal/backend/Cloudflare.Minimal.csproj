@@ -48,7 +48,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Bootsharp" Version="0.9.0" />
+        <!-- Floating onto the locally packed toolchain (nuget.config maps Bootsharp* to
+             src/cs/.nuget), the convention every other in-repo sample follows. -->
+        <PackageReference Include="Bootsharp" Version="*-*" />
         <!-- Logging.Abstractions arrives with Bootsharp.Cloudflare; the implementation assembly is
              referenced here because this app builds its own LoggerFactory instead of hosting one. -->
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
