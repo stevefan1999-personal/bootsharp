@@ -1,11 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bootsharp-cloudflare",
-  // A hand-written module that re-exports the emitted one (`dist/worker/entrypoints.ts`, written by
-  // `dotnet publish`) and adds the two things a SignalR hub needs and the emitter cannot produce:
-  // workerd's reserved hibernation callbacks, and a 101 response carrying a live socket. See its
-  // header. A worker with no hub points `main` straight at the emitted module.
-  "main": "worker/index.ts",
+  // Emitted by `dotnet publish`. A hub-hosting Durable Object is wrapped and routed there too
+  // (`[HubRoute]`), so this sample points `main` at the emitted module like every other one.
+  "main": "dist/worker/entrypoints.ts",
   "compatibility_date": "2026-08-13",
   // Required by Bootsharp.Cloudflare, not optional: js/runtime.mjs imports AsyncLocalStorage
   // from node:async_hooks to scope handles per logical invocation. nodejs_als
@@ -58,8 +56,8 @@
   "durable_objects": {
     "bindings": [
       { "name": "COUNTER", "class_name": "Counter" },
-      // The hub's room. `class_name` is the wrapper exported by worker/index.ts, not the emitted
-      // ChatRoom it subclasses — the wrapper is what carries the hibernation callbacks.
+      // The hub's room. `class_name` is the generated wrapper (`ChatRoomHub`), not `ChatRoom`:
+      // workerd reserves the hibernation handlers, so they live on the shipped subclass.
       { "name": "CHAT", "class_name": "ChatRoomHub" }
     ]
   },

@@ -12,9 +12,10 @@ namespace Cloudflare.Backend;
 /// The whole hosting surface is inherited. <c>Accept</c>/<c>Deliver</c>/<c>Disconnect</c>/<c>Sweep</c>
 /// come from the base as ordinary Bootsharp RPC methods, because workerd reserves the hibernation
 /// handler names (<c>webSocketMessage</c> and friends) and the entrypoint generator refuses to
-/// project onto them; the shipped <c>js/signalr.mjs</c> supplies those handlers and forwards to
-/// these. What the app writes is the two lines below.
+/// project onto them. <see cref="HubRouteAttribute"/> is what makes the emitted worker answer
+/// negotiate and the WebSocket upgrade; the app writes no JavaScript.
 /// </remarks>
+[HubRoute("/chat")]
 public sealed class ChatRoom (IDurableObjectState ctx, ICloudflareEnv env)
     : HubDurableObject<ChatHub, ICloudflareEnv>(ctx, env)
 {

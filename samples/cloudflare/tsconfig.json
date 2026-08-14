@@ -11,13 +11,13 @@
     "noEmit": true,
     "strict": false,
     "skipLibCheck": true,
-    // worker/index.ts imports the emitted module by its real name, extension included, which is how
-    // wrangler's bundler resolves it. Legal for tsc only with this flag, and harmless because
+    // The emitted module imports sibling assets by their real names, extension included, which is
+    // how wrangler's bundler resolves them. Legal for tsc only with this flag, and harmless because
     // nothing here is emitted.
     "allowImportingTsExtensions": true
   },
   // The worker module is publish output, not source: this is the gate that keeps a
   // regression in the emitter from reaching wrangler. It resolves "./runtime.mjs" through the
   // declarations the package ships beside it, and "*.wasm" through the ambient wasm.d.ts.
-  "include": ["dist/worker/**/*.ts", "worker/**/*.ts", "worker-configuration.d.ts"]
+  "include": ["dist/worker/**/*.ts", "worker-configuration.d.ts"]
 }

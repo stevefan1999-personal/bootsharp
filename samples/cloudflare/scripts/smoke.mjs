@@ -33,7 +33,7 @@ if (!existsSync(resolve(root, "dist/worker/entrypoints.ts"))) {
 }
 if (!existsSync(resolve(root, "dist/worker/signalr.mjs"))) {
   console.error("sample smoke: dist/worker/signalr.mjs is missing — Bootsharp.Cloudflare.SignalR's "
-    + "targets did not run, so worker/index.ts has no hibernation handlers to import.");
+    + "targets did not run, so the emitted module has no hibernation handlers to import.");
   process.exit(1);
 }
 

@@ -331,22 +331,13 @@ one static parameter-type array per method feeding `IInvocationBinder`, and dire
 An unsupported signature — generic, `ref`, `IAsyncEnumerable` — is a build error, never a surprise
 at handshake.
 
-### The one file of JavaScript, and why it exists
+### No app JavaScript
 
-`worker/index.ts` is hand-written and wrangler's `main` points at it instead of straight at the
-emitted module. It adds exactly two things the emitter is structurally unable to produce:
-
-1. **The hibernation callbacks.** workerd reserves `webSocketMessage`, `webSocketClose`,
-   `webSocketError` and `alarm` as entrypoint prototype members, and the Bootsharp entrypoint
-   generator refuses to project a C# method onto any reserved name. So the shipped
-   `js/signalr.mjs` subclasses the *generated* Durable Object and forwards those four callbacks to
-   the four ordinary RPC methods `HubDurableObject` declares (`accept`/`deliver`/`disconnect`/
-   `sweep`) — which means the guest calls still take the same gated path as every other actor call.
-2. **A 101 response carrying a live socket**, which the C# response snapshot (status + headers +
-   body) cannot express.
-
-Everything else falls through to `super.fetch`, which is the whole Minimal API above. A worker with
-no hub keeps pointing `main` at the emitted module and writes no JavaScript at all.
+wrangler's `main` is the emitted module. A `[HubRoute("/chat")]` on `ChatRoom` is what makes that
+module answer `{prefix}{room}/negotiate` and the WebSocket upgrade; the shipped `js/signalr.mjs`
+supplies workerd's reserved hibernation handlers (`webSocketMessage` / `Close` / `Error` / `alarm`)
+and a 101 carrying a live socket — neither of which can be a C# method or a C# response snapshot.
+The app writes none of that. A worker with no hub never imports the SignalR asset.
 
 ### What the platform actually does, and what the dispatcher does about it
 

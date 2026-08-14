@@ -51,7 +51,9 @@ public interface ICounterStub
 
 /// <summary>
 /// wrangler <c>CHAT</c> binding: TS <c>DurableObjectNamespace&lt;ChatRoomHub&gt;</c>. One instance
-/// per room name, which is why <see cref="GetByName"/> is the only accessor the sample uses.
+/// per room name, which is why <see cref="GetByName"/> is the only accessor the sample uses. The
+/// generated worker routes <c>/chat/</c> at this binding from <c>[HubRoute]</c> on
+/// <see cref="ChatRoom"/>.
 /// </summary>
 [JSHandle(Scope = HandleScope.Isolate)]
 public interface IChatRoomNamespace
@@ -63,8 +65,8 @@ public interface IChatRoomNamespace
 /// <summary>
 /// TS <c>DurableObjectStub&lt;ChatRoomHub&gt;</c>. Only <see cref="NegotiateResponse"/> is declared
 /// by <see cref="ChatRoom"/> itself: the four transport methods are inherited from
-/// <c>HubDurableObject</c> and injected into the projection by the shared rules, and the JavaScript
-/// hibernation handlers — not C# — are what call them.
+/// <c>HubDurableObject</c> and injected into the projection by the shared rules. The generated
+/// hibernation wrapper is what calls them.
 /// </summary>
 public interface IChatRoomStub
 {

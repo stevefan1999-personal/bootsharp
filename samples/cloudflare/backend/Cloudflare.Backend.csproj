@@ -88,9 +88,9 @@
          compile against the un-intercepted body and throw at startup. -->
     <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />
     <Import Project="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Build/Bootsharp.Cloudflare.AspNetCore.props" />
-    <!-- Copies js/signalr.mjs next to the emitted module. Without it ../worker/index.ts has nothing
-         to import the hibernation handlers from, and the DO binding resolves to a class with no
-         webSocketMessage. -->
+    <!-- Copies js/signalr.mjs next to the emitted module. The emitter imports it for every
+         hub-hosting Durable Object; without the copy the generated `hubDurableObject` import
+         would fail to resolve. -->
     <Import Project="../../../src/cs/Bootsharp.Cloudflare.SignalR/Build/Bootsharp.Cloudflare.SignalR.targets" />
 
 </Project>
