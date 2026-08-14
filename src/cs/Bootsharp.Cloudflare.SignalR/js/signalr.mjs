@@ -3,18 +3,12 @@
 // workerd owns `fetch`, `webSocketMessage`, `webSocketClose`, `webSocketError` and `alarm` as
 // entrypoint prototype members, and the Bootsharp entrypoint generator refuses to project a C#
 // method onto any of them (Projection/Rules.cs `Reserved`). So the hibernation handlers cannot be
-// generated — they are written here, once, and forwarded to the four ordinary RPC methods
-// `HubDurableObject<THub, TEnv>` declares (accept/deliver/disconnect/sweep). The generated class is
-// the base; this is a subclass of it, which is why the guest calls still go through exactly the
-// gate every other actor call goes through.
+// C# methods — they are written here, once, and forwarded to the four ordinary RPC methods
+// `HubDurableObject<THub, TEnv>` declares (accept/deliver/disconnect/sweep). The emitted module
+// imports this file and wraps each hub-hosting class; an app with a hub writes no JavaScript.
 //
-// Usage, in the app's own worker module:
-//
-// import { ChatRoom } from "./worker.mjs";
-// import { hubDurableObject } from "./signalr.mjs";
-// export const ChatRoomHub = hubDurableObject(ChatRoom);
-//
-// and point wrangler's durable_objects binding at `ChatRoomHub`.
+// Research harnesses that need a different sweep interval still call `hubDurableObject` themselves
+// against the unwrapped generated class.
 
 /// The SignalR ping, in both directions. `{"type":6}` followed by the 0x1E record separator is the
 /// entire frame — the client sends it on its keepalive timer and expects nothing back but the same
@@ -114,4 +108,30 @@ async function arm (self, sweepIntervalMs) {
   const scheduled = await self.ctx.storage.getAlarm();
   if (open && scheduled === null) await self.ctx.storage.setAlarm(Date.now() + sweepIntervalMs);
   else if (!open && scheduled !== null) await self.ctx.storage.deleteAlarm();
+}
+
+const negotiateSuffix = "/negotiate";
+
+/**
+ * Worker-side half of a hub URL: negotiate is answered on the actor (the room is the routing
+ * decision the token carries) and the upgrade is forwarded as a live Request, because a 101 with a
+ * socket is not a shape the C# response snapshot can express.
+ * @param {Request} request
+ * @param {URL} url
+ * @param {string} prefix normalized path prefix, with a trailing slash.
+ * @param {{ getByName: (name: string) => { negotiateResponse: (id: string) => Promise<string>, fetch: (request: Request) => Promise<Response> } }} ns
+ */
+export async function routeHub (request, url, prefix, ns) {
+  const negotiating = url.pathname.endsWith(negotiateSuffix);
+  const path = negotiating ? url.pathname.slice(0, -negotiateSuffix.length) : url.pathname;
+  const room = path.slice(prefix.length).split("/").filter(Boolean)[0];
+  if (!room) return new Response(`Expected ${prefix}<room>.`, { status: 404 });
+  const stub = ns.getByName(room);
+  if (negotiating) {
+    const body = await stub.negotiateResponse(crypto.randomUUID());
+    return new Response(body, { headers: { "content-type": "application/json" } });
+  }
+  if (request.headers.get("Upgrade") !== "websocket")
+    return new Response("Expected a WebSocket upgrade.", { status: 426 });
+  return stub.fetch(request);
 }

@@ -75,5 +75,76 @@ public class HubHostingTests
         Assert.Empty(Run().CompilationErrors);
     }
 
+    [Fact]
+    public void AHubHostingDurableObjectIsWrappedWithTheShippedHibernationHandlers ()
+    {
+        var run = Run();
+        Assert.Contains("import { hubDurableObject } from \"./signalr.mjs\";", run.GeneratedJs);
+        Assert.Contains("export const ChatRoomHub = hubDurableObject(ChatRoom);", run.GeneratedJs);
+        Assert.DoesNotContain("routeHub", run.GeneratedJs);
+    }
+
+    [Fact]
+    public void AHubRouteIsProjectedIntoTheWorkerFetchHandler ()
+    {
+        var run = GeneratorHarness.RunApp(
+            TestSources.App(
+                bindings: "IChatRoomNamespace CHAT { get; }",
+                extra: "public interface IChatRoomNamespace { }",
+                actorRuntime: TestSources.ActorRuntime),
+            HubHarness.Signalr,
+            """
+            namespace Cloudflare.Backend;
+
+            using Bootsharp.Cloudflare;
+            using Bootsharp.Cloudflare.SignalR;
+            using Microsoft.AspNetCore.SignalR;
+
+            public class ChatHub : Hub
+            {
+                public string Echo(string message) => message;
+            }
+
+            [HubRoute("/chat")]
+            public class ChatRoom(IDurableObjectState ctx, ICloudflareEnv env)
+                : HubDurableObject<ChatHub, ICloudflareEnv>(ctx, env)
+            {
+                protected override HubDispatcher<ChatHub> CreateDispatcher() => null!;
+            }
+            """);
+        Assert.Empty(run.DefectIds);
+        Assert.Contains("import { hubDurableObject, routeHub } from \"./signalr.mjs\";", run.GeneratedJs);
+        Assert.Contains(
+            """if (url.pathname.startsWith("/chat/")) return routeHub(request, url, "/chat/", this.env.CHAT);""",
+            run.GeneratedJs);
+    }
+
+    [Fact]
+    public void AHubRouteWithoutANamespaceBindingIsDiagnosed ()
+    {
+        var run = GeneratorHarness.RunActors(HubHarness.Signalr, """
+            namespace Cloudflare.Backend;
+
+            using Bootsharp.Cloudflare;
+            using Bootsharp.Cloudflare.SignalR;
+            using Microsoft.AspNetCore.SignalR;
+
+            public class ChatHub : Hub
+            {
+                public string Echo(string message) => message;
+            }
+
+            [HubRoute("/chat")]
+            public class ChatRoom(IDurableObjectState ctx, ICloudflareEnv env)
+                : HubDurableObject<ChatHub, ICloudflareEnv>(ctx, env)
+            {
+                protected override HubDispatcher<ChatHub> CreateDispatcher() => null!;
+            }
+            """);
+        Assert.Equal(["CFW051"], run.DefectIds);
+        Assert.Contains("IChatRoomNamespace", run.Defects.Single().GetMessage());
+        Assert.DoesNotContain("routeHub(request", run.GeneratedJs);
+    }
+
     private static GeneratorRun Run () => GeneratorHarness.RunActors(HubHarness.Signalr, chatRoom);
 }

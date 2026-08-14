@@ -90,7 +90,9 @@ internal static class Rules
     public static readonly string[] ModuleScope =
     [
         "assetPaths", "wasmModule", "wrapEnv", "wrappedEnvs",
-        "DurableObject", "WorkerEntrypoint", "WorkflowEntrypoint"
+        "DurableObject", "WorkerEntrypoint", "WorkflowEntrypoint",
+        // Imported from the SignalR package asset when a Durable Object hosts a hub.
+        "hubDurableObject", "routeHub"
     ];
 
     /// <summary>
@@ -200,6 +202,30 @@ internal static class Rules
     /// </summary>
     public static bool HostsHub (IEnumerable<string> baseNames) =>
         baseNames.Any(name => name == HubDurableObject);
+
+    /// <summary>
+    /// Marks a hub-hosting Durable Object as routed by the generated worker: negotiate and the
+    /// WebSocket upgrade are answered in the emitted fetch handler, so the app writes no JavaScript.
+    /// </summary>
+    public const string HubRouteAttribute = "Bootsharp.Cloudflare.SignalR.HubRouteAttribute";
+
+    /// <summary>
+    /// Export name of the hibernation wrapper. wrangler <c>class_name</c> names this, not the
+    /// generated actor class: workerd reserves the hibernation handlers, so they live on a
+    /// subclass the package ships.
+    /// </summary>
+    public static string HubExportName (string durableName) => durableName + "Hub";
+
+    /// <summary>
+    /// A hub route as the emitted fetch handler matches it: a leading and trailing slash, so
+    /// <c>/chat</c>, <c>chat</c> and <c>/chat/</c> are one prefix.
+    /// </summary>
+    public static string? NormalizeHubRoute (string? prefix)
+    {
+        if (prefix is null || prefix.Length == 0) return null;
+        var route = prefix[0] == '/' ? prefix : "/" + prefix;
+        return route[route.Length - 1] == '/' ? route : route + "/";
+    }
 }
 
 /// <param name="CsName">Name on <c>HubDurableObject</c>.</param>

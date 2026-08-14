@@ -146,6 +146,7 @@ internal sealed class MetadataProjector : IDisposable
     private Entrypoint? Project (Type type)
     {
         if (Kind(type) is not { } kind) return null;
+        var hostsHub = HostsHub(type);
         var methods = type
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Where(IsProjectable)
@@ -156,13 +157,25 @@ internal sealed class MetadataProjector : IDisposable
             // and DeclaredOnly is what both front ends read — so without this the emitted module
             // would expose no RPC at all and the SignalR JavaScript half would call four methods
             // that were never emitted. The generator injects the same four. See Rules.HubTransports.
-            .Concat(HostsHub(type) ? HubTransport() : [])
+            .Concat(hostsHub ? HubTransport() : [])
             .ToArray();
-        return new Entrypoint(kind, type.Name, type.Namespace ?? "", new(methods));
+        return new Entrypoint(kind, type.Name, type.Namespace ?? "", new(methods),
+            hostsHub, hostsHub ? HubRouteOf(type) : null);
     }
 
     /// <summary>Whether the class derives from <c>HubDurableObject&lt;THub, TEnv&gt;</c>.</summary>
     private static bool HostsHub (Type type) => Rules.HostsHub(Bases(type));
+
+    /// <summary>
+    /// Path prefix the generated worker routes to this hub, or null when the app did not declare
+    /// one. Read only on a hub-hosting class, matching the generator.
+    /// </summary>
+    private static string? HubRouteOf (Type type)
+    {
+        var data = Attribute(type.GetCustomAttributesData(), Rules.HubRouteAttribute);
+        var prefix = data?.ConstructorArguments.FirstOrDefault().Value as string;
+        return Rules.NormalizeHubRoute(prefix);
+    }
 
     /// <summary>Full names of every base, unbound — metadata spells a generic name with its arity.</summary>
     private static IEnumerable<string> Bases (Type type)

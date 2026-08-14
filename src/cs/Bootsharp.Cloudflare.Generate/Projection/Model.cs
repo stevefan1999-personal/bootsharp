@@ -10,11 +10,18 @@ namespace Bootsharp.Cloudflare.Projection;
 /// detail (metadata carries no nullable annotations) is still able to produce a complete model.
 /// </summary>
 /// <param name="Kind">Worker, DurableObject or Workflow.</param>
+/// <param name="HostsHub">Whether the class derives from <c>HubDurableObject</c>, in which case
+/// the emitted module wraps it with the shipped hibernation handlers.</param>
+/// <param name="HubRoute">Normalized path prefix a hub is served at (<c>/chat/</c>), or null when
+/// the worker does not route to this actor. Negotiate and the 101 upgrade are generated from it
+/// so an app with a hub writes no JavaScript.</param>
 internal sealed record Entrypoint(
     string Kind,
     string Name,
     string Namespace,
-    EquatableArray<Method> Methods);
+    EquatableArray<Method> Methods,
+    bool HostsHub = false,
+    string? HubRoute = null);
 
 /// <param name="Handler">Handler slot the method fills: fetch/queue/scheduled/run, or rpc.</param>
 /// <param name="Return">Encoded return shape: void/int/long/double/bool/string/rpcInt.</param>

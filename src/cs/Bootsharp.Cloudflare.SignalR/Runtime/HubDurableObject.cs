@@ -11,10 +11,11 @@ namespace Bootsharp.Cloudflare.SignalR;
 /// <para>Its four public methods are ordinary Bootsharp RPC methods — string in, string out — and
 /// that is the whole trick. workerd reserves <c>webSocketMessage</c>, <c>webSocketClose</c>,
 /// <c>webSocketError</c> and <c>alarm</c> as prototype members, which the entrypoint generator
-/// refuses to project (<c>Projection/Rules.cs</c>); the shipped <c>js/signalr.mjs</c> subclasses
-/// the generated Durable Object, supplies those four handlers, and forwards each to the RPC method
-/// below. No new emission machinery, and the calls go through exactly the gate every other actor
-/// call goes through.</para>
+/// refuses to project (<c>Projection/Rules.cs</c>); the emitted module wraps the generated class
+/// with <c>hubDurableObject</c> from the shipped <c>js/signalr.mjs</c>, which supplies those four
+/// handlers and forwards each to the RPC method below. A <c>[HubRoute]</c> on the class also
+/// generates the worker-side negotiate and upgrade routing, so the app writes no JavaScript.
+/// The calls go through exactly the gate every other actor call goes through.</para>
 /// <para>One DO per connection would be wrong: it makes every group send a cross-DO fan-out.</para>
 /// </remarks>
 public abstract class HubDurableObject<THub, TEnv> : DurableObject<TEnv>

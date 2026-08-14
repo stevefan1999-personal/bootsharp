@@ -39,8 +39,8 @@
     <ItemGroup>
         <!-- The Durable Object host half is hand-written JavaScript, like js/runtime.mjs: the
              hibernation handlers (webSocketMessage/webSocketClose/webSocketError/alarm) are
-             reserved workerd prototype members that the entrypoint generator refuses to project
-             (Projection/Rules.cs), so this is the module an app's worker subclasses. Copied next
+             reserved workerd prototype members that cannot be C# methods (Projection/Rules.cs).
+             The emitted module imports this file and wraps each hub-hosting class. Copied next
              to the emitted module by the targets below, never pasted into it. -->
         <Content Include="js/**" Pack="true" PackagePath="js/"/>
         <None Include="Build/Bootsharp.Cloudflare.SignalR.targets" Pack="true" PackagePath="build/;buildTransitive/"/>

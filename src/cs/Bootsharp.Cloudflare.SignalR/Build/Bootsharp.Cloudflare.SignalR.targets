@@ -2,9 +2,9 @@
 
     <PropertyGroup>
         <BsCfSignalRRoot>$(MSBuildThisFileDirectory)../</BsCfSignalRRoot>
-        <!-- Hand-written ESM shipped with this package: the hibernation handlers the entrypoint
-             generator is forbidden to project (ADR-0010 §3). Copied next to the emitted module,
-             never pasted into it — same rule as Bootsharp.Cloudflare's own js/ assets. -->
+        <!-- Hand-written ESM shipped with this package: the hibernation handlers and hub router
+             the emitted module imports (ADR-0010 §3). Copied next to that module, never pasted
+             into it — same rule as Bootsharp.Cloudflare's own js/ assets. -->
         <BsCfSignalRAssetDirectory Condition="'$(BsCfSignalRAssetDirectory)' == ''">$(BsCfSignalRRoot)js</BsCfSignalRAssetDirectory>
     </PropertyGroup>
 

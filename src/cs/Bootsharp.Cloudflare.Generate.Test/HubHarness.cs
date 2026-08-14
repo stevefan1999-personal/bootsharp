@@ -73,6 +73,12 @@ internal static class HubHarness
                 public abstract IReadOnlyList<string> MethodNames { get; }
             }
 
+            [AttributeUsage(AttributeTargets.Class, Inherited = false)]
+            public sealed class HubRouteAttribute(string pathPrefix) : Attribute
+            {
+                public string PathPrefix { get; } = pathPrefix;
+            }
+
             public abstract class HubDurableObject<THub, TEnv> : global::Bootsharp.Cloudflare.DurableObject<TEnv>
                 where THub : Hub where TEnv : class
             {

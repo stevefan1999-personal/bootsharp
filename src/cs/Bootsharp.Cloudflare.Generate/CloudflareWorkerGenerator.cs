@@ -78,14 +78,30 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
         // A hub-hosting Durable Object inherits its transport surface rather than declaring it, and
         // GetMembers() returns declared members only — so without this its JavaScript half would
         // call four methods that were never emitted. See SignalR/HubRules.Transport.
-        if (HostsHub(symbol)) dispatches.AddRange(HubTransport());
+        var hostsHub = HostsHub(symbol);
+        if (hostsHub) dispatches.AddRange(HubTransport());
         var space = symbol.ContainingNamespace.IsGlobalNamespace ? "" : symbol.ContainingNamespace.ToDisplayString();
-        var entrypoint = new Entrypoint(kind, symbol.Name, space, new(dispatches.Select(static d => d.Method)));
+        var entrypoint = new Entrypoint(kind, symbol.Name, space, new(dispatches.Select(static d => d.Method)),
+            hostsHub, hostsHub ? HubRouteOf(symbol) : null);
         return new Resolution(entrypoint, new(dispatches), new(defects), LocationInfo.From(symbol));
     }
 
     /// <summary>Whether the class derives from <c>HubDurableObject&lt;THub, TEnv&gt;</c>.</summary>
     private static bool HostsHub (INamedTypeSymbol symbol) => Rules.HostsHub(Bases(symbol));
+
+    /// <summary>
+    /// Path prefix the generated worker routes to this hub, or null when the app did not declare
+    /// one. Only read on a hub-hosting class: the same attribute on a plain Durable Object would
+    /// be a no-op, and the projector agrees.
+    /// </summary>
+    private static string? HubRouteOf (INamedTypeSymbol symbol)
+    {
+        var attribute = symbol.GetAttributes()
+            .FirstOrDefault(static data => data.AttributeClass is { } type
+                && FullName(type) == Rules.HubRouteAttribute);
+        var prefix = attribute?.ConstructorArguments.FirstOrDefault().Value as string;
+        return Rules.NormalizeHubRoute(prefix);
+    }
 
     /// <summary>Full names of every base, on the unbound name — a symbol's name carries no arity.</summary>
     private static IEnumerable<string> Bases (INamedTypeSymbol symbol)
@@ -264,6 +280,7 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
             .Concat(LogSinkDefect(logUses, importsLogSink))
             .ToList();
         var env = ChooseEnv(envs, list, defects);
+        defects.AddRange(HubRouteDefects(list, env));
         // The dispatch exists to construct and call actors, and it is one half of a partial class
         // whose other half — deriving from the packaged ActorRuntimeBase — the app declares. Three
         // conditions have to hold before it can compile: an app with no Durable Object and no
@@ -400,6 +417,27 @@ public sealed class CloudflareWorkerGenerator : IIncrementalGenerator
         if (entrypoint.Kind != "DurableObject") yield break;
         yield return Rules.Adapter(Rules.NamespaceType(entrypoint.Name));
         yield return Rules.Adapter(Rules.StubType(entrypoint.Name));
+        if (entrypoint.HostsHub) yield return Rules.HubExportName(entrypoint.Name);
+    }
+
+    /// <summary>
+    /// A <c>[HubRoute]</c> is how the emitted worker finds the namespace binding to forward
+    /// negotiate and the upgrade to. Without that binding the prefix would be dead code, so it
+    /// is refused rather than emitted as <c>this.env.undefined</c>.
+    /// </summary>
+    private static IEnumerable<Defect> HubRouteDefects (IReadOnlyList<Resolution> list, Env env)
+    {
+        foreach (var resolution in list)
+        {
+            var entrypoint = resolution.Entrypoint;
+            if (entrypoint.HubRoute is null) continue;
+            var nsType = Rules.NamespaceType(entrypoint.Name);
+            if (env.Bindings.Items.Any(binding => binding.TypeName == nsType)) continue;
+            yield return new Defect("CFW051", "Hub route has no namespace binding",
+                $"'{entrypoint.Name}' declares [HubRoute(\"{entrypoint.HubRoute}\")] but the env has no " +
+                $"'{nsType}' binding, so the emitted worker cannot route that prefix.",
+                resolution.Location);
+        }
     }
 
     private static IEnumerable<Defect> LogSinkDefect (ImmutableArray<LocationInfo> uses, bool imported)
