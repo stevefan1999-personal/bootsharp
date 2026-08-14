@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <!-- Same contained toolchain hack the samples carry, and for the same reason (ADR-0006 §2):
+         the host SDK's workload set is broken and NativeAOT-LLVM needs no wasm-tools, so the
+         resolver is off and the Emscripten packs are imported by path when they are present. -->
+    <_EmscriptenPackVersion>10.0.9</_EmscriptenPackVersion>
+    <_EmscriptenSdk Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenSdk>
+    <_EmscriptenNode Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenNode>
+    <_EmscriptenCache Condition="Exists('/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props')">/usr/share/dotnet/packs/Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/$(_EmscriptenPackVersion)/Sdk/Sdk.props</_EmscriptenCache>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!-- The resolver is bypassed only when the packs can be imported by path instead, so a machine
+         with a working workload set (CI) resolves Emscripten the normal way and one with a broken
+         one (ADR-0006 §2) still links. scripts/llvm-test.sh applies the same test to its /p: flag,
+         because the referenced library projects sit outside this file's directory scope. -->
+    <MSBuildEnableWorkloadResolver Condition="'$(_EmscriptenSdk)' != ''">false</MSBuildEnableWorkloadResolver>
+  </PropertyGroup>
+
+  <Import Project="$(_EmscriptenSdk)" Condition="'$(_EmscriptenSdk)' != ''"/>
+  <Import Project="$(_EmscriptenNode)" Condition="'$(_EmscriptenNode)' != ''"/>
+  <Import Project="$(_EmscriptenCache)" Condition="'$(_EmscriptenCache)' != ''"/>
+</Project>

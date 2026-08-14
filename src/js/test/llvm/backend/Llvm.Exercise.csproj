@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Llvm.Exercise</RootNamespace>
+        <AssemblyName>Llvm.Exercise</AssemblyName>
+        <BootsharpName>exercise</BootsharpName>
+        <BootsharpBinariesDirectory>$(MSBuildProjectDirectory)/../dist/wasm</BootsharpBinariesDirectory>
+        <BootsharpPublishDirectory>$(MSBuildProjectDirectory)/../dist/js</BootsharpPublishDirectory>
+        <BootsharpPackageDirectory>$(MSBuildProjectDirectory)/../dist</BootsharpPackageDirectory>
+        <!-- The point of this project: everything else in the repo's automated suite publishes
+             -c Debug, which is Mono. This lane is the only one that exercises NativeAOT-LLVM. -->
+        <BsLlvm>true</BsLlvm>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <InvariantTimezone>true</InvariantTimezone>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <EmccFlags>$(EmccFlags) -sENVIRONMENT=web -sDYNAMIC_EXECUTION=0</EmccFlags>
+        <IsAotCompatible>true</IsAotCompatible>
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <BsCfWorkerDirectory>$(MSBuildProjectDirectory)/../dist/worker</BsCfWorkerDirectory>
+        <!-- The package would carry the task under tasks/; a ProjectReference carries no package
+             layout, so the registration points at the task's build output instead. -->
+        <BsCfTaskAssembly>$(MSBuildProjectDirectory)/../../../../cs/Bootsharp.Cloudflare.Publish/bin/$(Configuration)/net10.0/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- By project, so the lane always exercises the working tree rather than a stale pack:
+             this is the gate that says the emitter's new output survives the LLVM toolchain. -->
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+        <ProjectReference Include="../../../../cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Bootsharp itself is consumed as the locally packed toolchain, exactly as the samples
+             and src/js/test/cs consume it: the publish task and the emitter under test ship there. -->
+        <PackageReference Include="Bootsharp" Version="*-*"/>
+    </ItemGroup>
+
+    <Import Project="../../../../cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets"/>
+
+</Project>

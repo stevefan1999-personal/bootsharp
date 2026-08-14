@@ -2,6 +2,7 @@
     "scripts": {
         "build": "bash scripts/build.sh",
         "compile-test": "bash scripts/compile-test.sh",
+        "test:llvm": "bash scripts/llvm-test.sh",
         "test": "vitest run",
         "cover": "vitest run --coverage --coverage.thresholds.100 --coverage.include=**/bin/bootsharp/**/*.mjs"
     },

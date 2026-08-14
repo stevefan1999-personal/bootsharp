@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": [],
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true
+  },
+  // The emitted worker module is publish output, not source: type-checking it is what keeps an
+  // emitter regression from reaching workerd.
+  "include": ["dist/worker/**/*.ts", "worker-configuration.d.ts"]
+}

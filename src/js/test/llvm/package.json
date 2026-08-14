@@ -1,0 +1,14 @@
+{
+  "name": "bootsharp-llvm-exercise",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "publish:cs": "bash ../../scripts/llvm-test.sh --publish-only",
+    "check:ts": "wrangler types && tsc --noEmit -p tsconfig.json",
+    "dev": "wrangler dev --local"
+  },
+  "devDependencies": {
+    "wrangler": "^4.122.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bootsharp-llvm-exercise",
+  "main": "dist/worker/entrypoints.ts",
+  "compatibility_date": "2026-08-13",
+  // nodejs_compat is a prerequisite of Bootsharp.Cloudflare: js/runtime.mjs imports
+  // AsyncLocalStorage from node:async_hooks to scope handles per logical invocation.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": false },
+  // workerd refuses to compile wasm from bytes inside a request, so the binary reaches the isolate
+  // as a module import instead.
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": false }
+  ],
+  "vars": {
+    "ENVIRONMENT": "test"
+  },
+  "kv_namespaces": [
+    // Placeholder id: `wrangler dev --local` simulates KV and never reads it.
+    { "binding": "KV", "id": "00000000000000000000000000000000" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PROBE", "class_name": "Probe" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Probe"] }
+  ]
+}

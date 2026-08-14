@@ -41,3 +41,35 @@ jobs:
           fail_ci_if_error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # The `cover` job publishes -c Debug, which is Mono. Every mechanism ADR-0002 relies on — awaited
+  # primitive imports, handle scopes, deterministic release — ships on the NativeAOT-LLVM path and
+  # is otherwise untested (ADR-0006 §4, research/06 implication 10). This job publishes an exercise
+  # worker with BsLlvm=true and runs it under real workerd.
+  #
+  # Kept as its own job rather than a step of `cover`: it needs the Emscripten packs and a workerd
+  # download, and a failure here must be legible as "the LLVM lane broke", not as lost coverage.
+  # macOS cannot run it at all until bootsharp ships an osx host ILCompiler-LLVM pack (ADR-0006).
+  llvm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: setup dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+      - name: llvm end-to-end
+        run: |
+          # NativeAOT-LLVM links with emcc, which arrives with the wasm-tools workload.
+          dotnet workload install wasm-tools
+          cd src/js
+          npm install
+          npm run build
+          cd ../cs
+          bash ./.scripts/llvm.sh
+          bash ./.scripts/pack.sh
+          cd ../js
+          npm run test:llvm
