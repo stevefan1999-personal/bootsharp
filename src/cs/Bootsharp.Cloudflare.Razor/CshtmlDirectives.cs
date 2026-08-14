@@ -48,6 +48,19 @@ namespace Bootsharp.Cloudflare.Razor;
 /// writes <c>@param.Something</c>.
 /// </para>
 /// <para>
+/// <b>A code block alone on its line takes the line's whitespace with it.</b> Razor elides both the
+/// leading indentation before a code block and the newline after it, so
+/// <c>@if (x) {&lt;p&gt;…&lt;/p&gt;}</c> written on its own line emits the <c>&lt;p&gt;</c> and
+/// nothing around it, while the same markup written as an implicit expression
+/// <c>@Banner.Notice(…)</c>, a method returning <c>Bootsharp.Cloudflare.AspNetCore.Html.HtmlString</c>
+/// leaves the surrounding whitespace exactly as authored. Neither is wrong and the difference is
+/// inert in a browser, but it is a real difference in the bytes on the wire: it is measured at five
+/// bytes per render for one such line. When the exact output matters — a golden-file test, a page
+/// being converted from another tier and diffed against it — reach for the expression form. When it
+/// does not, the block form is cheaper, because a fragment is built by the runtime template handler
+/// and roots the request-time scanner that a compiled <c>@if</c> does not need.
+/// </para>
+/// <para>
 /// <b>Why the MVC directives are registered at all.</b> <c>@inject</c>, <c>@page</c> and
 /// <c>@section</c> are not Razor-language directives — they belong to the MVC extension this
 /// generator never registers. Left unregistered they do not fail: they parse as an implicit

@@ -28,6 +28,10 @@ internal sealed record CshtmlRun (
     public string Code => string.Join(Environment.NewLine, Generated.OrderBy(static pair => pair.Key,
         StringComparer.Ordinal).Select(static pair => pair.Value));
 
+    /// <summary>The single file a one-page run emitted, with line endings normalised so that a
+    /// golden comparison pins the emitted shape rather than the host's newline convention.</summary>
+    public string Emitted => Generated.Values.Single().Replace("\r\n", "\n");
+
     /// <summary>The <c>html.Write*</c> calls the pages compiled to, trimmed and in order.</summary>
     public string[] Writes =>
     [
@@ -87,6 +91,17 @@ internal static class CshtmlHarness
     /// <param name="arguments">What the page's <c>@model</c> and <c>@param</c> directives declared.</param>
     public static string Render (string page, object?[] arguments, params Page[] pages)
     {
+        var writer = new AspNetCore.Html.StringHtmlWriter();
+        Load(page, pages).GetMethod("Render")!.Invoke(null, [writer, .. arguments]);
+        return writer.ToString();
+    }
+
+    /// <summary>Compiles the pages, loads them, and hands back one page's generated type.</summary>
+    /// <remarks>The type rather than its output, for the claims that are about the class the page
+    /// became — that an <c>@attribute</c> landed on it, what <c>Render</c>'s signature is — which are
+    /// invisible in rendered HTML and only half-visible in the emitted text.</remarks>
+    public static Type Load (string page, params Page[] pages)
+    {
         var run = Run(pages);
         Assert.Empty(run.Diagnostics);
         var directory = Directory.CreateTempSubdirectory("bootsharp-cshtml-tests");
@@ -104,11 +119,8 @@ internal static class CshtmlHarness
             var result = compilation.Emit(path);
             Assert.True(result.Success, string.Join(Environment.NewLine,
                 result.Diagnostics.Where(static d => d.Severity == DiagnosticSeverity.Error)));
-            var writer = new AspNetCore.Html.StringHtmlWriter();
-            var type = Assembly.LoadFrom(path).GetType(page)
+            return Assembly.LoadFrom(path).GetType(page)
                 ?? throw new InvalidOperationException($"{page} is not in the emitted assembly.");
-            type.GetMethod("Render")!.Invoke(null, [writer, .. arguments]);
-            return writer.ToString();
         }
         finally { directory.Delete(true); }
     }
