@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Cloudflare.Backend.Data;
 using Cloudflare.Backend.Hosting;
 using Cloudflare.Backend.Ssr;
@@ -70,8 +71,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
     public async Task<IResult> GetD1Grid()
     {
         var grid = await db.Prepare(selectNotes + " LIMIT 5").Grid();
-        return JsonText("{\"columns\":[" + string.Join(",", grid.Columns.Select(c => "\"" + Json.Escape(c) + "\"")) +
-                        "],\"rows\":" + grid.RowsJson + ",\"rowsRead\":" + grid.RowsRead + "}");
+        return TypedResults.Ok(new GridView(grid.Columns, JsonPayload.Parse(grid.RowsJson), grid.RowsRead));
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
     }
 
     public async Task<IResult> GetDoSql() =>
-        JsonText("{\"orm\":\"do-sql\",\"rows\":" + await counter.GetByName("global").SqlDemo() + "}");
+        TypedResults.Ok(new DoSqlView("do-sql", JsonPayload.Parse(await counter.GetByName("global").SqlDemo())));
 
     public async Task<IResult> SendQueue(HttpRequest request)
     {
@@ -180,7 +180,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
         var userId = form.Get("userId", "demo");
         var instance = await workflow.Create(new WorkflowInstanceCreateOptions
         {
-            Params = "{\"userId\":\"" + Json.Escape(userId) + "\"}"
+            Params = JsonSerializer.Serialize(new WorkflowParams(userId), ApiJsonContext.Default.WorkflowParams)
         });
         return Flash.Home("workflow-" + instance.Id);
     }
@@ -195,7 +195,7 @@ public sealed class SiteService(ILogger<SiteService> logger)
         // Template arguments become their own fields in Workers Logs, so "did the cron ever run in
         // this environment" is answerable by filtering on the field rather than grepping messages.
         logger.LogInformation("scheduled heartbeat read {Found} in {Environment}", heartbeat is not null, environment);
-        return JsonText("{\"lastScheduled\":" + (heartbeat ?? "null") + "}");
+        return TypedResults.Ok(new ScheduledView(JsonPayload.Parse(heartbeat)));
     }
 
     /// <summary>
@@ -253,7 +253,9 @@ public sealed class SiteService(ILogger<SiteService> logger)
         try
         {
             var listed = await r2.List(new R2ListOptions { Prefix = "", Limit = 20 });
-            r2List = "[" + string.Join(",", listed.Objects.Select(o => "{\"key\":\"" + Json.Escape(o.Key) + "\",\"size\":" + o.Size + "}")) + "]";
+            r2List = JsonSerializer.Serialize(
+                listed.Objects.Select(o => new R2ListItem(o.Key, o.Size)).ToArray(),
+                ApiJsonContext.Default.R2ListItemArray);
         }
         catch (Exception ex) { loadError = Join(loadError, "r2: " + ex.Message); }
         try { n = await counter.GetByName("global").Get(); } catch (Exception ex) { loadError = Join(loadError, "do: " + ex.Message); }

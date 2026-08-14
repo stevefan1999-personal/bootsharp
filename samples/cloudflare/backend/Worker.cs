@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Cloudflare.Backend;
@@ -35,7 +36,7 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger)
             logger.LogError(ex, "worker fetch failed");
             return new HttpResponseData(
                 StatusCodes.Status500InternalServerError,
-                "{\"content-type\":\"text/plain; charset=utf-8\"}",
+                HeaderJson.Render(new HeaderDictionary { ["content-type"] = "text/plain; charset=utf-8" }),
                 "Internal server error");
         }
         finally
@@ -83,9 +84,11 @@ public sealed class Worker(WebApplication app, ILogger<Worker> logger)
     private static string Heartbeat(IScheduledController controller)
     {
         var scheduledTimeMs = (long)controller.ScheduledTime;
-        var scheduledAt = DateTimeOffset.FromUnixTimeMilliseconds(scheduledTimeMs);
-        return "{\"cron\":\"" + Json.Escape(controller.Cron)
-            + "\",\"scheduledTime\":" + scheduledTimeMs
-            + ",\"scheduledAt\":\"" + scheduledAt.ToString("O") + "\"}";
+        return JsonSerializer.Serialize(
+            new ScheduledHeartbeat(
+                controller.Cron,
+                scheduledTimeMs,
+                DateTimeOffset.FromUnixTimeMilliseconds(scheduledTimeMs)),
+            ApiJsonContext.Default.ScheduledHeartbeat);
     }
 }

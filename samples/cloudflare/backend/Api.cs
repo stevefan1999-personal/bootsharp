@@ -32,6 +32,24 @@ public sealed record EchoView(string Text, int Times, string Result);
 /// <summary>What the cookie route reports back: what arrived, so a round trip is observable.</summary>
 public sealed record CookiesView(string? Session, int Count);
 
+/// <summary><c>GET /api/d1-grid</c>: D1's positional grid plus the columns the statement named.</summary>
+public sealed record GridView(string[] Columns, JsonElement Rows, long RowsRead);
+
+/// <summary><c>GET /api/do-sql</c>: rows from the Durable Object SQLite transport.</summary>
+public sealed record DoSqlView(string Orm, JsonElement Rows);
+
+/// <summary><c>GET /api/scheduled</c>: the last cron heartbeat, or JSON null when none has run.</summary>
+public sealed record ScheduledView(JsonElement LastScheduled);
+
+/// <summary>The KV value the cron handler writes so a scheduled run is observable.</summary>
+public sealed record ScheduledHeartbeat(string Cron, long ScheduledTime, DateTimeOffset ScheduledAt);
+
+/// <summary>Workflow <c>params</c> payload.</summary>
+public sealed record WorkflowParams(string UserId);
+
+/// <summary>One R2 object as the home page lists it.</summary>
+public sealed record R2ListItem(string Key, long Size);
+
 /// <summary>
 /// The JSON metadata this app serializes through.
 /// </summary>
@@ -58,6 +76,14 @@ public sealed record CookiesView(string? Session, int Count);
 [JsonSerializable(typeof(NoteInput))]
 [JsonSerializable(typeof(EchoView))]
 [JsonSerializable(typeof(CookiesView))]
+[JsonSerializable(typeof(GridView))]
+[JsonSerializable(typeof(DoSqlView))]
+[JsonSerializable(typeof(ScheduledView))]
+[JsonSerializable(typeof(ScheduledHeartbeat))]
+[JsonSerializable(typeof(WorkflowParams))]
+[JsonSerializable(typeof(R2ListItem))]
+[JsonSerializable(typeof(R2ListItem[]))]
+[JsonSerializable(typeof(JsonElement))]
 public sealed partial class ApiJsonContext : JsonSerializerContext;
 
 /// <summary>
@@ -73,4 +99,11 @@ internal static class NoteRows
 {
     public static NoteView? Read(string? rowJson) =>
         string.IsNullOrEmpty(rowJson) ? null : JsonSerializer.Deserialize(rowJson, ApiJsonContext.Default.NoteView);
+}
+
+/// <summary>Parses JSON text the bindings already produced into a <see cref="JsonElement"/>.</summary>
+internal static class JsonPayload
+{
+    public static JsonElement Parse (string? json) =>
+        JsonSerializer.Deserialize(json ?? "null", ApiJsonContext.Default.JsonElement);
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Cloudflare.Minimal;
@@ -50,23 +51,25 @@ public sealed class Worker (ILogger<Worker> logger) : WorkerEntrypoint<IWorkerEn
         // Template arguments become their own indexed fields in Workers Logs, so "which environment
         // answered this" is answerable by filtering on a field rather than by grepping messages.
         logger.LogInformation("health checked in {Environment}", stage);
-        return JsonReply(200, $$"""
-            {"ok":true,"runtime":{{Json.Quote(".NET " + Environment.Version)}},"environment":{{Json.Quote(stage)}}}
-            """);
+        return JsonReply(200, JsonSerializer.Serialize(
+            new HealthView(true, ".NET " + Environment.Version, stage),
+            ApiJsonContext.Default.HealthView));
     }
 
     private async Task<WorkerResponse> ReadKv (string key)
     {
         var value = await kv.Get(key);
         logger.LogInformation("kv read {Key} {Found}", key, value is not null);
-        return JsonReply(200, $$"""{"key":{{Json.Quote(key)}},"value":{{Json.Quote(value)}}}""");
+        return JsonReply(200, JsonSerializer.Serialize(
+            new ValueView(key, value), ApiJsonContext.Default.ValueView));
     }
 
     private async Task<WorkerResponse> WriteKv (string key, string value)
     {
         await kv.Put(key, value, null);
         logger.LogInformation("kv wrote {Key}", key);
-        return JsonReply(200, $$"""{"key":{{Json.Quote(key)}},"stored":true}""");
+        return JsonReply(200, JsonSerializer.Serialize(
+            new StoredView(key, true), ApiJsonContext.Default.StoredView));
     }
 
     private static WorkerResponse JsonReply (int status, string body) =>
