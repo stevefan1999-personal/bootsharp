@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using static Bootsharp.Instances;
 
 namespace Bootsharp.Common.Test;
@@ -174,4 +175,83 @@ public class InstancesTest
     {
         Assert.Null(Resolve<object>(0));
     }
+
+    [Fact]
+    public void DisposeImportedIgnoresForeignProxy ()
+    {
+        // An ID released by an invocation scope may be recycled to another instance,
+        // whose registration the finalizer of the previously associated proxy must not evict.
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(101);
+        Assert.False(DisposeImported(101, new Foo()));
+        Assert.Same(imported, Resolve<IFoo>(101));
+        Assert.True(DisposeImported(101, imported));
+    }
+
+    [Fact]
+    public void DisposeImportedNotifiesForDelegateProxy ()
+    {
+        // Imported delegates register the delegate, while the finalizer is on its target proxy.
+        var proxy = new DelegateProxy(102);
+        Action del = proxy.Invoke;
+        RegisterImport(typeof(Action), _ => del);
+        Resolve<Action>(102);
+        Assert.True(DisposeImported(102, proxy));
+    }
+
+    [Fact]
+    public void DisposeImportedIgnoresUnknownIds ()
+    {
+        Assert.False(DisposeImported(103, new Foo()));
+    }
+
+    [Fact]
+    public void DisposeImportedNotifiesWhenRegisteredWasCollected ()
+    {
+        // Short weak references are cleared when the object is found unreachable, ie before its
+        // finalizer runs, in which case the finalizing proxy is the only possible owner of the ID.
+        RegisterImport(typeof(IFoo), _ => new Foo());
+        ResolveTransient(104);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        Assert.True(DisposeImported(104, new Foo()));
+    }
+
+    [Fact]
+    public void ReleasedImportIsNotDisposedAgain ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(105);
+        ReleaseImported(105);
+        Assert.False(DisposeImported(105, imported));
+    }
+
+    [Fact]
+    public void ReleasedImportIsResolvedAnew ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(106);
+        ReleaseImported(106);
+        RegisterImport(typeof(IFoo), _ => new Foo());
+        Assert.NotSame(imported, Resolve<IFoo>(106));
+        ReleaseImported(106);
+    }
+
+    [Fact]
+    public void UncheckedDisposeImportedOverloadIsPreserved ()
+    {
+        var imported = new Foo();
+        RegisterImport(typeof(IFoo), _ => imported);
+        Resolve<IFoo>(107);
+        DisposeImported(107);
+        RegisterImport(typeof(IFoo), _ => new Foo());
+        Assert.NotSame(imported, Resolve<IFoo>(107));
+        DisposeImported(107);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ResolveTransient (int id) => Resolve<IFoo>(id);
 }

@@ -200,10 +200,17 @@ internal static class GlobalType
     {
         if (type is InstanceMeta it)
             if (it.Importer is { } importer) return $"$i.{importer}({exp})";
-            else return $"$i.import({exp})";
+            else return $"$i.{ImportFn(it)}({exp})";
         if (type is SerializedMeta sm) return $"serialize({exp}, $s.{sm.Id})";
         return exp;
     }
+
+    /// <summary>
+    /// Name of the instance registry function importing instances of the specified type: isolate-scoped
+    /// handles are registered exempt from the host's per-invocation scope tracking.
+    /// </summary>
+    public static string ImportFn (InstanceMeta it) =>
+        it.Handle is { Scope: HandleScope.Isolate } ? "importExempt" : "import";
 
     private static Nullity FixNullity (Nullity nul, IEnumerable<CustomAttributeData> attrs, MemberInfo? scope)
     {

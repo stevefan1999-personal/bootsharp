@@ -113,6 +113,45 @@ public static class Instances
         importedById.Remove(id);
     }
 
+    /// <summary>
+    /// Notifies that the specified proxy of an imported interop instance is no longer used on the
+    /// C# side and can be untracked. Unlike <see cref="DisposeImported(int)"/>, untracks only when
+    /// the proxy is still the instance registered for the ID: an ID released by an invocation scope
+    /// (see <see cref="ReleaseImported"/>) may already have been recycled to another instance, whose
+    /// registration a stale finalizer must not evict.
+    /// </summary>
+    /// <param name="id">The unique identifier of the disposed instance.</param>
+    /// <param name="proxy">The binding proxy being finalized or disposed.</param>
+    /// <returns>Whether the instance was untracked and the JavaScript side should be notified.</returns>
+    public static bool DisposeImported (int id, object proxy)
+    {
+        if (importedById.GetValueOrDefault(id) is not { } weak) return false;
+        if (!Owns(weak.Target, proxy)) return false;
+        importedById.Remove(id);
+        return true;
+
+        static bool Owns (object? registered, object proxy)
+        {
+            // The registered instance is not always the proxy itself: a delegate import registers the
+            // delegate, whose target is the proxy. It's also collected before the proxy is finalized —
+            // short weak references are cleared when the object is found unreachable, ie before its
+            // finalizer runs — in which case the finalizing proxy is the only possible owner.
+            if (registered is null) return true;
+            if (ReferenceEquals(registered, proxy)) return true;
+            return registered is Delegate del && ReferenceEquals(del.Target, proxy);
+        }
+    }
+
+    /// <summary>
+    /// Invoked from JavaScript when an invocation scope releases an imported instance: untracks the
+    /// proxy without notifying the JavaScript side back (it's the one initiating the release).
+    /// </summary>
+    /// <param name="id">The unique identifier of the released instance.</param>
+    public static void ReleaseImported (int id)
+    {
+        importedById.Remove(id);
+    }
+
     private static object Key (object it)
     {
         // preserves specialized export instance identity

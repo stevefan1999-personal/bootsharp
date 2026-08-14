@@ -57,7 +57,18 @@ internal record InstanceMeta (Type Clr) : ProxyMeta(Clr)
     /// Name of the specialized JS importer function or null when not required.
     /// </summary>
     public string? Importer { get; init; }
+    /// <summary>
+    /// Describes the handle declaration of the instanced type or null when it's not a handle.
+    /// </summary>
+    public HandleMeta? Handle { get; init; }
 }
+
+/// <summary>
+/// Describes an instanced type declared an opaque JavaScript handle with <see cref="JSHandleAttribute"/>.
+/// </summary>
+/// <param name="Decl">TypeScript declaration replacing the generated one or null when not specified.</param>
+/// <param name="Scope">Lifetime of the JavaScript objects carried by the handle type.</param>
+internal sealed record HandleMeta (string? Decl, HandleScope Scope);
 
 /// <summary>
 /// Describes an instance surface projected from a delegate type.

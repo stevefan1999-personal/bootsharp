@@ -33,7 +33,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_IImported (int id) : global::Bootsharp.JSProxy(id), global::IImported
             {
-                ~JS_Import_IImported() => Instances.DisposeImported(_id);
+                ~JS_Import_IImported() => Instances.DisposeImported(_id, this);
 
                 public event global::System.Action<global::Record?> OnRecordChanged;
                 internal void InvokeOnRecordChanged (global::Record? obj) => OnRecordChanged?.Invoke(obj);
@@ -183,7 +183,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_System_Action (int id) : global::Bootsharp.JSProxy(id)
             {
-                ~JS_Import_System_Action() => Instances.DisposeImported(_id);
+                ~JS_Import_System_Action() => Instances.DisposeImported(_id, this);
 
                 public void Invoke () => global::Bootsharp.Generated.Interop.JS_Import_System_Action_Invoke(_id);
             }
@@ -192,7 +192,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_System_Func_Of_System_Int32_And_System_String (int id) : global::Bootsharp.JSProxy(id)
             {
-                ~JS_Import_System_Func_Of_System_Int32_And_System_String() => Instances.DisposeImported(_id);
+                ~JS_Import_System_Func_Of_System_Int32_And_System_String() => Instances.DisposeImported(_id, this);
 
                 public global::System.String Invoke (global::System.Int32 arg) => global::Bootsharp.Generated.Interop.JS_Import_System_Func_Of_System_Int32_And_System_String_Invoke(_id, arg);
             }
@@ -201,7 +201,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_Notify (int id) : global::Bootsharp.JSProxy(id)
             {
-                ~JS_Import_Notify() => Instances.DisposeImported(_id);
+                ~JS_Import_Notify() => Instances.DisposeImported(_id, this);
 
                 public void Invoke (global::System.String msg) => global::Bootsharp.Generated.Interop.JS_Import_Notify_Invoke(_id, msg);
             }
@@ -255,7 +255,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_Custom (int id) : global::CustomImport(id)
             {
-                ~JS_Import_Custom() => Instances.DisposeImported(_id);
+                ~JS_Import_Custom() => Instances.DisposeImported(_id, this);
 
                 public override event global::System.Action AddedEvent;
                 internal void InvokeAddedEvent () => AddedEvent?.Invoke();
@@ -307,7 +307,7 @@ public class CSInstanceTest : GenerateCSTest
             """
             public sealed class JS_Import_IntEvent (int id) : global::EventImport<global::System.Int32>(id)
             {
-                ~JS_Import_IntEvent() => Instances.DisposeImported(_id);
+                ~JS_Import_IntEvent() => Instances.DisposeImported(_id, this);
 
                 protected override object Unwrap () => new global::IntEvent();
             }
@@ -412,5 +412,74 @@ public class CSInstanceTest : GenerateCSTest
         AddAssembly(WithClass("[Export] public static void Foo (CancellationToken ct) {}"));
         Execute();
         Contains("Instances.RegisterImport(typeof(global::System.Threading.CancellationToken),");
+    }
+
+    [Fact]
+    public void HandleProxyIsDisposable ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle("ReadableStream")] public interface IStream : IDisposable;
+
+            public class Class
+            {
+                [Import] public static IStream GetStream () => default!;
+            }
+            """));
+        Execute();
+        Contains(
+            """
+            public sealed class JS_Import_IStream (int id) : global::Bootsharp.JSProxy(id), global::IStream, global::System.IDisposable
+            {
+                ~JS_Import_IStream() => Instances.DisposeImported(_id, this);
+
+                public void Dispose ()
+                {
+                    global::System.GC.SuppressFinalize(this);
+                    Instances.DisposeImported(_id, this);
+                }
+            }
+            """);
+    }
+
+    [Fact]
+    public void NonHandleProxyIsNotDisposable ()
+    {
+        AddAssembly(With(
+            """
+            public interface IStream;
+
+            public class Class
+            {
+                [Import] public static IStream GetStream () => default!;
+            }
+            """));
+        Execute();
+        Contains("public sealed class JS_Import_IStream (int id) : global::Bootsharp.JSProxy(id), global::IStream\n");
+        DoesNotContain("Dispose ()");
+    }
+
+    [Fact]
+    public void FinalizerPassesProxyIdentity ()
+    {
+        // The identity is what allows the registry to ignore a finalizer of a proxy whose ID was
+        // already released by an invocation scope and recycled to another instance.
+        AddAssembly(With(
+            """
+            public interface IOpaque;
+
+            public class Class
+            {
+                [Import] public static IOpaque GetOpaque () => default!;
+                [Import] public static Action GetAction () => default!;
+                [Import] public static CancellationToken GetToken () => default!;
+            }
+            """));
+        Execute();
+        Contains("~JS_Import_IOpaque() => Instances.DisposeImported(_id, this);");
+        Contains("~JS_Import_System_Action() => Instances.DisposeImported(_id, this);");
+        Contains("~JS_Import_System_Threading_CancellationToken() => Instances.DisposeImported(_id, this);");
+        Contains("if (Bootsharp.Instances.DisposeImported(id, proxy)) NotifyImportedDisposed(id);");
+        Contains("[JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);");
     }
 }

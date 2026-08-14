@@ -109,6 +109,7 @@ internal sealed class TypeInspector
             Members = new List<MemberMeta>(),
             Exporter = ResolveExporter(),
             Importer = ResolveImporter(),
+            Handle = Preferences.IsHandle(type, out var handle) ? handle : null,
         }, ik, nul);
 
         static bool IsInstanced (Type type)

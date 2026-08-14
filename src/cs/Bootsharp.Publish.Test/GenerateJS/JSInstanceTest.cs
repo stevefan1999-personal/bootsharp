@@ -313,4 +313,37 @@ public class JSInstanceTest : GenerateJSTest
             };
             """);
     }
+    [Fact]
+    public void IsolateHandleWithEventUsesExemptImport ()
+    {
+        // An instance declaring an event is imported through a generated wrapper, which
+        // short-circuits the adapter emitted for the value — the exemption has to reach both.
+        AddAssembly(With(
+            """
+            [JSHandle(Scope = HandleScope.Isolate)] public interface IState { event Action? Changed; }
+
+            public class Class
+            {
+                [Import] public static IState GetState () => default!;
+            }
+            """));
+        Execute();
+        Contains("return $i.importExempt(it, _id => {");
+    }
+
+    [Fact]
+    public void InvocationHandleWithEventUsesPlainImport ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle] public interface IState { event Action? Changed; }
+
+            public class Class
+            {
+                [Import] public static IState GetState () => default!;
+            }
+            """));
+        Execute();
+        Contains("return $i.import(it, _id => {");
+    }
 }

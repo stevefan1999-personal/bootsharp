@@ -1787,4 +1787,74 @@ public class DeclarationTest : GenerateJSTest
             }
             """);
     }
+    [Fact]
+    public void HandleDeclIsReplaced ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle("ReadableStream")] public interface IReadableStream;
+
+            public class Class
+            {
+                [Import] public static IReadableStream Get () => default!;
+            }
+            """));
+        Execute();
+        Contains("export type IReadableStream = ReadableStream;");
+        DoesNotContain("export interface IReadableStream");
+    }
+
+    [Fact]
+    public void HandleDeclStartingWithExportIsUsedVerbatim ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle("export type $name = ReadableStream | null;")] public interface IStream;
+
+            public class Class
+            {
+                [Import] public static IStream Get () => default!;
+            }
+            """));
+        Execute();
+        Contains("export type IStream = ReadableStream | null;");
+    }
+
+    [Fact]
+    public void HandleWithMembersKeepsDeclOverride ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle("Request")] public interface IJsRequest { string Method { get; } }
+
+            public class Class
+            {
+                [Import] public static IJsRequest Get () => default!;
+            }
+            """));
+        Execute();
+        Contains("export type IJsRequest = Request;");
+        DoesNotContain("readonly method: string;");
+    }
+
+    [Fact]
+    public void HandleWithoutDeclIsDeclaredAsInterface ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle(Scope = HandleScope.Isolate)] public interface IState { string Id { get; } }
+
+            public class Class
+            {
+                [Import] public static IState Get () => default!;
+            }
+            """));
+        Execute();
+        Contains(
+            """
+            export interface IState {
+                readonly id: string;
+            }
+            """);
+    }
 }

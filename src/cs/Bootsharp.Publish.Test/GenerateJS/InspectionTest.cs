@@ -119,4 +119,32 @@ public class InspectionTest : GenerateJSTest
         Assert.True(File.Exists($"{Task.BuildDirectory}/generated/modules/foo.g.mjs"));
         Assert.True(File.Exists($"{Task.BuildDirectory}/generated/modules/bar.g.mjs"));
     }
+
+    [Fact]
+    public void WarnsWhenHandleDeclaresDispose ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle] public interface IStream { void Dispose (); }
+
+            public class Class
+            {
+                [Import] public static IStream GetStream () => default!;
+            }
+            """));
+        Execute();
+        Assert.Contains(Engine.Warnings, w => w.Contains("can't declare a 'Dispose' member"));
+    }
+
+    [Fact]
+    public void HandlesAreResolvedAcrossAssemblies ()
+    {
+        // Preferences of all the assemblies are resolved before any of them is inspected,
+        // so a handle declared in one assembly affects the surfaces projected from another.
+        AddAssembly("handles.dll", With("Handles",
+            "[JSHandle(Scope = HandleScope.Isolate)] public interface IStream;"));
+        AddAssembly("foo.dll", WithClass("Foo", "[Import] public static Handles.IStream Get () => default!;"));
+        Execute();
+        Contains("foo.g.mjs", "$i.importExempt(this.getHandler())");
+    }
 }

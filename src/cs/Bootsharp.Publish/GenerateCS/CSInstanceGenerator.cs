@@ -24,10 +24,9 @@ internal sealed class CSInstanceGenerator
               internal static T Exported<T> (int id) where T : class => Bootsharp.Instances.Exported<T>(id);
               internal static T? Resolve<T> (int id) => Bootsharp.Instances.Resolve<T>(id);
 
-              internal static void DisposeImported (int id)
+              internal static void DisposeImported (int id, object proxy)
               {
-                  NotifyImportedDisposed(id);
-                  Bootsharp.Instances.DisposeImported(id);
+                  if (Bootsharp.Instances.DisposeImported(id, proxy)) NotifyImportedDisposed(id);
               }
 
               [ModuleInitializer]
@@ -43,6 +42,7 @@ internal sealed class CSInstanceGenerator
               }
 
               [JSExport] private static void DisposeExported (int id) => Bootsharp.Instances.DisposeExported(id);
+              [JSExport] private static void ReleaseImported (int id) => Bootsharp.Instances.ReleaseImported(id);
               [JSImport("instances.disposeImported", "Bootsharp")] private static partial void NotifyImportedDisposed (int id);
           }
 
@@ -90,11 +90,22 @@ internal sealed class CSInstanceGenerator
 
     private string EmitOpaqueProxy (InstanceMeta it) =>
         $$"""
-          public sealed class {{it.Proxy.Id}} (int id) : global::Bootsharp.JSProxy(id), {{it.Syntax}}
+          public sealed class {{it.Proxy.Id}} (int id) : global::Bootsharp.JSProxy(id), {{it.Syntax}}{{(it.Handle != null ? ", global::System.IDisposable" : "")}}
           {
-              ~{{it.Proxy.Id}}() => Instances.DisposeImported(_id);
+              ~{{it.Proxy.Id}}() => Instances.DisposeImported(_id, this);
 
-              {{Fmt(it.Members.Select(EmitMemberImport))}}
+              {{Fmt([EmitHandleDispose(it), ..it.Members.Select(EmitMemberImport)])}}
+          }
+          """;
+
+    // Handles are released deterministically: neither NativeAOT finalizers nor the JS finalization
+    // registry fire reliably in the hosts (workerd) the handle category exists for.
+    private static string? EmitHandleDispose (InstanceMeta it) => it.Handle == null ? null :
+        $$"""
+          public void Dispose ()
+          {
+              global::System.GC.SuppressFinalize(this);
+              Instances.DisposeImported(_id, this);
           }
           """;
 
@@ -102,7 +113,7 @@ internal sealed class CSInstanceGenerator
         $$"""
           public sealed class {{it.Proxy.Id}} (int id) : {{sp.Import.Syntax}}(id)
           {
-              ~{{it.Proxy.Id}}() => Instances.DisposeImported(_id);
+              ~{{it.Proxy.Id}}() => Instances.DisposeImported(_id, this);
 
               {{Fmt([..it.Members.Select(EmitMemberImport), sp.CS?.Replace("$full", it.Syntax)])}}
           }
@@ -118,7 +129,7 @@ internal sealed class CSInstanceGenerator
             $$"""
               public sealed class {{del.Proxy.Id}} (int id) : global::Bootsharp.JSProxy(id)
               {
-                  ~{{del.Proxy.Id}}() => Instances.DisposeImported(_id);
+                  ~{{del.Proxy.Id}}() => Instances.DisposeImported(_id, this);
 
                   public {{inv.Return.TypeSyntax}} Invoke ({{args}}) => {{fn}}({{callArgs}});
               }

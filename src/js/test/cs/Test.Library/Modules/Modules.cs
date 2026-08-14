@@ -105,6 +105,37 @@ public static partial class Modules
         return result;
     }
 
+    /// <summary>
+    /// Exercises async imports whose values are all natively marshalled — the case that has to
+    /// tolerate a foreign thenable and a plain (non-promise) value returned by the JS handler.
+    /// </summary>
+    [Export]
+    public static async Task<string> GetImportedNativesAsync (IImportedInstanced imported)
+    {
+        var module = GetImportedModule();
+        await module.GetVoidAsync();
+        return $"{await imported.GetCountAsync()}:{await module.GetCountAsync()}:{await module.GetNameAsync()}";
+    }
+
+    [Export]
+    public static string GetInstanceArg (IImportedInstanced imported)
+    {
+        return imported.GetInstanceArg();
+    }
+
+    [Export]
+    public static string GetIsolateHandleId ()
+    {
+        return GetImportedModule().GetIsolateHandle().GetId();
+    }
+
+    [Export]
+    public static string GetScopedHandleKind ()
+    {
+        using var handle = GetImportedModule().GetScopedHandle();
+        return handle.GetKind();
+    }
+
     private static IImportedModule GetImportedModule ()
     {
         return (IImportedModule)Bootsharp.Modules.Imports[typeof(IImportedModule)].Instance;

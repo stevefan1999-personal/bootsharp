@@ -572,4 +572,15 @@ public class CSInteropTest : GenerateCSTest
         Contains("[JSExport] internal static void Space_Class_Inv () => global::Space.Class.Inv();");
         Contains("""[JSImport("Class.funSerialized", "foo")] internal static partial void Space_Class_Fun_Serialized ();""");
     }
+    [Fact]
+    public void PrimitiveAsyncImportIsNotAwaitedInCS ()
+    {
+        // The C# side awaits only to run an adapter on the settled value; adding an await for a
+        // natively marshalled task would insert a pointless continuation hop.
+        AddAssembly(WithClass("[Import] public static Task<int> Get () => default!;"));
+        Execute();
+        Contains("""[JSImport("Class.getSerialized", "index")] internal static partial global::System.Threading.Tasks.Task<global::System.Int32> Class_Get_Serialized ();""");
+        Contains("public static global::System.Threading.Tasks.Task<global::System.Int32> Class_Get () => Class_Get_Serialized();");
+        DoesNotContain("async");
+    }
 }

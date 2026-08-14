@@ -10,6 +10,7 @@ class Imported implements IImportedInstanced {
     inner = new ImportedInner();
     constructor(private arg: string) { }
     getInstanceArg() { return this.arg; }
+    async getCountAsync() { return 1; }
     async getRecordIdAsync(record: Record) {
         await new Promise(res => setTimeout(res, 1));
         return record.id;
@@ -215,6 +216,31 @@ describe("while bootsharp is booted", () => {
         cs.onBiChanged.unsubscribe(eventHandler);
         cs.onSpecial.unsubscribe(specialHandler);
         Modules.canInteropWithBidirectional();
+    });
+    it("awaits async imports with natively marshalled values", async () => {
+        const getVoid = async () => {};
+        const getCount = async () => 2;
+        const getName = async () => "promise";
+        IImportedModule.getVoidAsync = getVoid;
+        IImportedModule.getCountAsync = getCount;
+        IImportedModule.getNameAsync = getName;
+        expect(IImportedModule.getVoidAsync).toBe(getVoid);
+        expect(IImportedModule.getCountAsync).toBe(getCount);
+        expect(IImportedModule.getNameAsync).toBe(getName);
+        expect(await Modules.getImportedNativesAsync(new Imported("natives"))).toStrictEqual("1:2:promise");
+    });
+    it("tolerates thenables returned from async imports", async () => {
+        // Reproduces workerd's JsRpcPromise, which is a foreign thenable rather than a native promise.
+        IImportedModule.getVoidAsync = (() => ({ then: (res: () => void) => res() })) as never;
+        IImportedModule.getCountAsync = (() => ({ then: (res: (v: number) => void) => res(3) })) as never;
+        IImportedModule.getNameAsync = (() => ({ then: (res: (v: string) => void) => res("thenable") })) as never;
+        expect(await Modules.getImportedNativesAsync(new Imported("natives"))).toStrictEqual("1:3:thenable");
+    });
+    it("tolerates plain values returned from async imports", async () => {
+        IImportedModule.getVoidAsync = (() => undefined) as never;
+        IImportedModule.getCountAsync = (() => 4) as never;
+        IImportedModule.getNameAsync = (() => "plain") as never;
+        expect(await Modules.getImportedNativesAsync(new Imported("natives"))).toStrictEqual("1:4:plain");
     });
     it("releases instances after use", async () => {
         IImportedModule.getInstanceAsync = async (arg) => new Imported(arg);

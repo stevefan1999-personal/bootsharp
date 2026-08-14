@@ -181,10 +181,13 @@ internal sealed class JSModuleGenerator (bool debug)
         }
     }
 
-    private bool ShouldWait (MethodMeta method)
-    {
-        if (!method.Async) return false;
-        return method.Args.Any(a => a.Value.IsSerialized || a.Value.IsInstanced) ||
-               method.Return.IsSerialized || method.Return.IsInstanced;
-    }
+    /// <remarks>
+    /// Every async member is awaited, in both interop directions, even when none of its values
+    /// requires an adapter. On the import side this is a correctness fix: awaiting normalizes a
+    /// foreign thenable (workerd's JsRpcPromise) into a native promise before the .NET task
+    /// marshaller sees it, and tolerates a handler satisfying a Task contract with a plain value.
+    /// On the export side a .NET task is always a real promise, so awaiting can't change the
+    /// settled value; the predicate is shared to keep a single rule for both directions.
+    /// </remarks>
+    private bool ShouldWait (MethodMeta method) => method.Async;
 }

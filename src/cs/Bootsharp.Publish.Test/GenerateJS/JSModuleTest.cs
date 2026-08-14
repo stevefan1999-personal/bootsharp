@@ -272,7 +272,7 @@ public class JSModuleTest : GenerateJSTest
         Contains(
             """
             export const Class = {
-                nya: () => exports.Class_Nya(),
+                nya: async () => await exports.Class_Nya(),
                 get fun() { return this.funHandler; },
                 set fun(handler) { this.funHandler = handler; this.funSerializedHandler = () => this.funHandler(); },
                 get funSerialized() { return this.funSerializedHandler; }
@@ -1034,5 +1034,89 @@ public class JSModuleTest : GenerateJSTest
                 "B": 1
             };
             """);
+    }
+    [Fact]
+    public void AwaitsAsyncImportWithNativeValues ()
+    {
+        // Awaiting normalizes foreign thenables (eg, workerd's JsRpcPromise) into native promises
+        // before the .NET task marshaller sees them, even when no value requires an adapter.
+        AddAssembly(WithClass("[Import] public static Task<int> Get () => default!;"));
+        Execute();
+        Contains("set get(handler) { this.getHandler = handler; this.getSerializedHandler = async () => await this.getHandler(); }");
+    }
+
+    [Fact]
+    public void AwaitsAsyncInstanceImportWithNativeValues ()
+    {
+        AddAssembly(With(
+            """
+            public interface IFoo { Task<int> Count (); }
+
+            public class Class
+            {
+                [Import] public static IFoo GetFoo () => default!;
+            }
+            """));
+        Execute();
+        Contains("countSerialized: async (_id) => await $i.imported(_id).count()");
+        DoesNotContain("countSerialized: (_id) =>");
+    }
+
+    [Fact]
+    public void AwaitsAsyncExportWithNativeValues ()
+    {
+        AddAssembly(WithClass("[Export] public static Task<int> Get () => default!;"));
+        Execute();
+        Contains("get: async () => await exports.Class_Get()");
+    }
+
+    [Fact]
+    public void DoesNotAwaitSyncImport ()
+    {
+        AddAssembly(With(
+            """
+            public interface IFoo { int Count (); }
+
+            public class Class
+            {
+                [Import] public static IFoo GetFoo () => default!;
+            }
+            """));
+        Execute();
+        Contains("countSerialized: (_id) => $i.imported(_id).count()");
+        DoesNotContain("async");
+    }
+
+    [Fact]
+    public void IsolateHandleUsesExemptImport ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle(Scope = HandleScope.Isolate)] public interface IState;
+
+            public class Class
+            {
+                [Import] public static IState GetState () => default!;
+            }
+            """));
+        Execute();
+        Contains("set getState(handler) { this.getStateHandler = handler; this.getStateSerializedHandler = () => $i.importExempt(this.getStateHandler()); }");
+    }
+
+    [Fact]
+    public void InvocationHandleUsesPlainImport ()
+    {
+        AddAssembly(With(
+            """
+            [JSHandle] public interface IStream;
+
+            public class Class
+            {
+                [Import] public static IStream GetStream () => default!;
+            }
+            """));
+        Execute();
+        Contains("$i.import(this.getStreamHandler())");
+        DoesNotContain("importExempt");
     }
 }

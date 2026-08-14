@@ -97,6 +97,7 @@ internal sealed class DeclarationGenerator
     private void DeclareInstance (InstanceMeta it)
     {
         doc.Type(it);
+        if (DeclareHandle()) return;
         if (DeclareSpecialized(out var specialized)) return;
         bld.Enter($$"""export interface {{ts.BuildName(it.Clr)}}{{BuildExtensions()}} {""");
         foreach (var member in it.Members.Where(m => ShouldDeclareOn(it.Clr, m.Info)))
@@ -105,6 +106,16 @@ internal sealed class DeclarationGenerator
             else if (member is MethodMeta method) DeclareMethod(method);
         if (specialized != null) bld.Line(specialized);
         bld.Exit("}");
+
+        // A handle is declared as the host type it carries, so that the consumer can hand the same
+        // object to the host APIs typed with it, instead of the structurally empty generated interface.
+        bool DeclareHandle ()
+        {
+            if (it.Handle?.Decl is not { Length: > 0 } decl) return false;
+            decl = Fmt(decl).Replace("$name", ts.BuildName(it.Clr)).Replace("$full", ts.BuildRef(it.Clr));
+            bld.Line(decl.StartsWith("export ") ? decl : $"export type {ts.BuildName(it.Clr)} = {decl};");
+            return true;
+        }
 
         bool DeclareSpecialized (out string? decl)
         {

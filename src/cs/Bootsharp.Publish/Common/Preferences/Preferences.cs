@@ -8,6 +8,7 @@ internal static class Preferences
     private sealed class Prefs
     {
         public Dictionary<Type, Specialization> Specs { get; } = [];
+        public Dictionary<Type, HandleMeta> Handles { get; } = [];
         public Func<Type, string, string?>? Module, Node;
         public Func<MemberInfo, string, string?>? Member;
     }
@@ -22,6 +23,7 @@ internal static class Preferences
     {
         ResolveRenames(ass);
         ResolveSpecs(ass);
+        ResolveHandles(ass);
     }
 
     public static IReadOnlyCollection<TypeMeta> Rename (IReadOnlyCollection<TypeMeta> types)
@@ -43,6 +45,12 @@ internal static class Preferences
             renamed.Add(type);
         }
         return renamed;
+    }
+
+    public static bool IsHandle (Type type, [NotNullWhen(true)] out HandleMeta? handle)
+    {
+        // Keyed by the open type, so that a generic handle is declared once for all its variants.
+        return (handle = prefs.Handles.GetValueOrDefault(OpenGeneric(type))) != null;
     }
 
     public static bool IsSpecialized (Type type) => IsSpecialized(type, out _);
@@ -84,6 +92,28 @@ internal static class Preferences
             prefs.Specs[clr] = imports.TryGetValue(clr, out var i)
                 ? new() { Import = i.Type, Export = export, CS = i.CS, JS = i.JS, JSCtor = i.JSCtor, Decl = i.Decl }
                 : throw new Error($"Specialized export '{export.FullName}' is missing the paired import.");
+    }
+
+    private static void ResolveHandles (Assembly ass)
+    {
+        foreach (var type in ass.GetExportedTypes())
+        foreach (var attr in type.CustomAttributes)
+            if (IsAttribute<JSHandleAttribute>(attr))
+                prefs.Handles[Validate(type)] = new(GetAttributeArg<string>(attr), ResolveScope(attr));
+
+        // The generated proxy of a handle carries its own Dispose, so a user-declared one would collide.
+        static Type Validate (Type type) => type.GetMethod("Dispose") == null ? type
+            : throw new Error($"Handle '{type.FullName}' can't declare a 'Dispose' member.");
+
+        // The inspected assembly is loaded into a collectible context and doesn't share the enum's
+        // identity, so the named argument's boxed value can only be read as its underlying integer.
+        static HandleScope ResolveScope (CustomAttributeData attr)
+        {
+            foreach (var arg in attr.NamedArguments)
+                if (arg.MemberName == nameof(JSHandleAttribute.Scope))
+                    return (HandleScope)Convert.ToInt32(arg.TypedValue.Value);
+            return HandleScope.Invocation;
+        }
     }
 
     private static FieldInfo GetMetaField (string prop) =>

@@ -6,6 +6,7 @@ export async function bindExports(runtime: RuntimeAPI, assembly: string) {
     const asm = await runtime.getAssemblyExports(assembly);
     exports = asm["Bootsharp"]["Generated"]["Interop"] ?? {};
     exports.disposeExported = asm["Bootsharp"]["Generated"]["Instances"].DisposeExported;
+    exports.releaseImported = asm["Bootsharp"]["Generated"]["Instances"].ReleaseImported;
 }
 
 // noinspection JSUnusedGlobalSymbols (used by the generated code in debug mode)

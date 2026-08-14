@@ -32,7 +32,7 @@ internal sealed class JSInstanceGenerator (bool debug, JSModules md)
         return
             $$"""
               $i.{{it.Importer}} = function (it) {
-                  return $i.import(it, _id => {
+                  return $i.{{ImportFn(it)}}(it, _id => {
                       {{Fmt(evt.Select(e => $"it.{e.JSName}.subscribe(handle{e.Name});"))}}
                       /* v8 ignore start -- not reliably coverable, as it's invoked on GC */
                       return () => {

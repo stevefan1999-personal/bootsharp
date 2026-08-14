@@ -13,4 +13,5 @@ public interface IImportedInstanced
     string GetInstanceArg ();
     Task<string> GetRecordIdAsync (Record record);
     Task<IBidirectional> GetBiAsync (Func<IBidirectional>? factory = null);
+    Task<int> GetCountAsync ();
 }

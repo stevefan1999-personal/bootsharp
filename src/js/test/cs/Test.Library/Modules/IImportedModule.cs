@@ -11,4 +11,10 @@ public interface IImportedModule
     Record? Record { get; set; }
 
     Task<IImportedInstanced> GetInstanceAsync (string arg);
+    Task<int> GetCountAsync ();
+    Task<string> GetNameAsync ();
+    Task GetVoidAsync ();
+
+    IIsolateHandle GetIsolateHandle ();
+    IScopedHandle GetScopedHandle ();
 }
