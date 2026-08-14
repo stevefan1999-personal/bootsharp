@@ -179,7 +179,7 @@ a `TypeError` in production.
 | --- | --- |
 | more bindings (D1, R2, Queues, Workflows) | a property on `IWorkerEnv` and the binding in `wrangler.jsonc` |
 | static assets | an `assets` block in `wrangler.jsonc` and `[assembly: WorkerAssets(…)]`; without the attribute the emitted module never touches an assets binding |
-| a Durable Object | a `class X : DurableObject<IWorkerEnv>`, plus the `partial class ActorRuntime : ActorRuntimeBase<IWorkerEnv>, IActorRuntime` half the generated dispatch lands in |
+| a Durable Object | a `class X : DurableObject<IWorkerEnv>`, plus the `partial class ActorRuntime : ActorRuntimeBase<IWorkerEnv>, IActorRuntime` half the generated dispatch lands in — forget it and the generator says so, as `CFW050`, instead of letting the generated file fail to compile |
 | dependency injection | `Bootsharp.Inject` — `services.AddBootsharp()` / `provider.RunBootsharp()` instead of the hand-wiring in `Program.cs` |
 | routing, model binding, `IResult` | ADR-0008's `Bootsharp.Cloudflare.AspNetCore` layer, once it lands |
 

@@ -188,14 +188,16 @@ public sealed class Hub : IHub
             }
             case "sp":
                 // Same reads, but re-reading the handle property on every iteration — the half of
-                // the A/B that intermittently dies with
+                // the A/B that used to intermittently die with
                 // "TypeError: Cannot read properties of undefined (reading 'get')" (2 of 9 runs,
-                // against 0 of 9 for the hoisted path above). Working hypothesis: repeated property
-                // reads make several C# proxies over ONE JavaScript object, which the registry keys
-                // by identity into one id, and the first of those proxies to be finalized disposes
-                // that id out from under the rest. Isolate scope does not help — it exempts the id
-                // from invocation-scope release, not from C#-initiated disposal. Kept because a
-                // hub's lifetime manager reaches through Ctx.Storage exactly this way.
+                // against 0 of 9 for the hoisted path above), and now does not (0 of 25). The
+                // earlier hypothesis recorded here — several C# proxies racing to dispose one
+                // shared id — is refuted: Instances.Resolve caches weakly BY ID, so there is only
+                // ever one proxy and one finalizer per id. The two real causes were a registry that
+                // did not refcount its hand-offs, and a proxy the precise GC could finalize between
+                // the read of _id and the interop call carrying it. See the README A/B table and
+                // Kept as a standing regression guard, because a hub's lifetime
+                // manager reaches through Ctx.Storage exactly this way.
                 for (var index = 0; index < count; index++) await state.Ctx.Storage.Get("interleave");
                 return "";
             case "yl":

@@ -284,9 +284,11 @@ public interface ICloudflareEnv { IKvNamespace KV { get; } /* … */ }
   `CloudflareJsonLoggerProvider` without that import is `CFW015` at compile time instead of a
   `TypeError` at boot.
 
-`npm run test:generator` covers each of these, and the `CFW015`–`CFW019` diagnostics that guard
-them: missing log-sink import, missing / ambiguous `[WorkerEnv]`, a binding with no adapter, and a
-class whose projected JS name would collide with something the module already declares.
+`npm run test:generator` covers each of these, and the `CFW015`–`CFW019` and `CFW050` diagnostics
+that guard them: missing log-sink import, missing / ambiguous `[WorkerEnv]`, a binding with no
+adapter, a class whose projected JS name would collide with something the module already declares,
+and an app that hosts a Durable Object or Workflow without declaring the `ActorRuntime` half the
+generated dispatch lands in.
 
 ## How the worker module is built
 
