@@ -2,6 +2,8 @@
 
 C# backend compiled with **NativeAOT-LLVM** (Bootsharp), hosted as a Cloudflare Worker. The JS isolate is only a shim: it instantiates WASM once per isolate, then hands `fetch` / `queue` / Durable Object RPC / Workflow `run` to C#.
 
+A Worker that is *only* the `.cshtml` tier lives in [`samples/cloudflare-razor`](../cloudflare-razor).
+
 ## C# entrypoints (no per-class JavaScript)
 
 ```csharp

@@ -1,0 +1,106 @@
+@model HomeModel
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Bootsharp Razor on Cloudflare</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a2e;
+      --ink: #f4f7ff;
+      --muted: #9aa6c6;
+      --line: #2a3354;
+      --accent: #7c5cff;
+      --cyan: #3ee0c5;
+      --ok: #3ee0c5;
+      --bad: #ff6b8a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 ui-sans-serif, system-ui, sans-serif; }
+    a { color: var(--cyan); }
+    header {
+      padding: 3rem 1.5rem 2rem;
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(900px 320px at 8% -20%, rgba(124,92,255,.28), transparent 55%),
+        radial-gradient(700px 280px at 92% 0%, rgba(62,224,197,.12), transparent 50%);
+    }
+    header p.kicker { margin: 0 0 .6rem; letter-spacing: .16em; text-transform: uppercase; font-size: .72rem; color: var(--cyan); }
+    header h1 { margin: 0 0 .5rem; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -.04em; }
+    header .lead { margin: 0; max-width: 40rem; color: var(--muted); }
+    .pills { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.2rem; }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: .15rem .7rem; font-size: .8rem; color: var(--muted); }
+    main { display: grid; gap: 1rem; padding: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    article {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.15rem 1.25rem 1.3rem;
+    }
+    article h2 { margin: 0 0 .4rem; font-size: 1.05rem; }
+    article p { margin: 0 0 .85rem; color: var(--muted); font-size: .93rem; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    pre { background: #080c18; padding: .75rem; border-radius: 10px; overflow: auto; font-size: .8rem; color: #d7dcff; }
+    form { display: flex; flex-direction: column; gap: .5rem; }
+    input, button {
+      border-radius: 10px; border: 1px solid var(--line); padding: .55rem .7rem;
+      font: inherit; color: var(--ink); background: #080c18;
+    }
+    button { background: var(--accent); border-color: transparent; font-weight: 650; cursor: pointer; }
+    .hello { font-size: 1.35rem; color: var(--ink); margin: 0 0 .4rem; }
+    .warn { color: var(--bad); }
+    footer { padding: 1.5rem; color: var(--muted); font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Bootsharp.Cloudflare.Razor</p>
+    <h1>.cshtml on a Worker</h1>
+    <p class="lead">This page is a Razor file compiled at build time into straight-line
+      <code>HtmlWriter</code> calls. There is no MVC runtime, no <code>ViewData</code>, and
+      nothing of Razor in the published wasm — only C# on NativeAOT-LLVM.</p>
+    <div class="pills">
+      <span class="pill">@Model.Runtime</span>
+      <span class="pill">env @Model.Environment</span>
+      <span class="pill">.cshtml → HtmlWriter</span>
+      <span class="pill">LLVM wasm</span>
+    </div>
+  </header>
+  <main>
+    <article>
+      <h2>Say hello</h2>
+@if (Model.Name is { Length: > 0 })
+{
+      <p class="hello">Hello, @Model.Name.</p>
+      <p>Your name was written through the element-content encoder. Markup in the query is escaped, not executed.</p>
+}
+else
+{
+      <p class="hello">Hello, isolate.</p>
+      <p>Pass <code>?name=</code> to bind a query string onto <code>@@model</code> and render it here.</p>
+}
+      <form method="get" action="/">
+        <input name="name" value="@Model.Name" placeholder="your name" maxlength="80"/>
+        <button type="submit">Render</button>
+      </form>
+    </article>
+    <article>
+      <h2>Context-aware encoding</h2>
+      <p>A URL-valued attribute uses the URL sink. A <code>javascript:</code> probe is refused rather than escaped into a still-runnable scheme.</p>
+      <p><a href="@Model.Probe">probe link</a></p>
+      <pre>probe query: @(Model.Probe ?? "(none)")</pre>
+      <p><a href="/?probe=javascript:alert(1)">try javascript:alert(1)</a></p>
+    </article>
+    <article>
+      <h2>What this is</h2>
+      <p>The handler is <code>TypedResults.Html(html =&gt; Home.Render(html, model))</code>.
+        <code>@@model</code> is a render parameter named <code>Model</code> — syntax familiarity
+        without MVC semantics.</p>
+      <p><a href="/api/health">health JSON</a></p>
+    </article>
+  </main>
+  <footer>Bootsharp × Cloudflare Workers · Razor syntax, HtmlWriter runtime, no Razor assembly in the isolate.</footer>
+</body>
+</html>

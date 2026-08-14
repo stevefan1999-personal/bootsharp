@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <!-- Host SDK has a broken workload set. LLVM does not need wasm-tools. -->
+    <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+    <_EmscriptenPacks>/usr/share/dotnet/packs/</_EmscriptenPacks>
+  </PropertyGroup>
+
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Sdk.linux-x64')"/>
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Node.linux-x64')"/>
+  <Import Project="$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64/*/Sdk/Sdk.props"
+          Condition="Exists('$(_EmscriptenPacks)Microsoft.NET.Runtime.Emscripten.3.1.56.Cache.linux-x64')"/>
+</Project>

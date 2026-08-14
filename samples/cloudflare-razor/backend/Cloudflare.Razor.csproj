@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Cloudflare.Razor</RootNamespace>
+        <AssemblyName>Cloudflare.Razor</AssemblyName>
+        <BootsharpName>backend</BootsharpName>
+        <BootsharpBinariesDirectory>$(MSBuildProjectDirectory)/../dist/wasm</BootsharpBinariesDirectory>
+        <BootsharpPublishDirectory>$(MSBuildProjectDirectory)/../dist/js</BootsharpPublishDirectory>
+        <BootsharpPackageDirectory>$(MSBuildProjectDirectory)/../dist</BootsharpPackageDirectory>
+        <BsLlvm>true</BsLlvm>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <InvariantTimezone>true</InvariantTimezone>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <EmccFlags>$(EmccFlags) -sENVIRONMENT=web -sDYNAMIC_EXECUTION=0</EmccFlags>
+        <IsAotCompatible>true</IsAotCompatible>
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+        <MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
+        <OptimizationPreference>Size</OptimizationPreference>
+        <BsCfWorkerDirectory>$(MSBuildProjectDirectory)/../dist/worker</BsCfWorkerDirectory>
+        <BsCfTaskAssembly>$(MSBuildProjectDirectory)/../../../src/cs/Bootsharp.Cloudflare.Publish/bin/$(Configuration)/net10.0/Bootsharp.Cloudflare.Publish.dll</BsCfTaskAssembly>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare/Bootsharp.Cloudflare.csproj" />
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Bootsharp.Cloudflare.AspNetCore.csproj" />
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Generate/Bootsharp.Cloudflare.Generate.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="../../../src/cs/Bootsharp.Cloudflare.Publish/Bootsharp.Cloudflare.Publish.csproj"
+                          ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Bootsharp" Version="*-*" />
+        <!-- The .cshtml tier (ADR-0011 §3). Taken as a package because the generator and the pinned
+             Razor compiler both ship under analyzers/, and a ProjectReference carries no such payload.
+             Nothing from it reaches the worker: what the page compiles to is calls on HtmlWriter. -->
+        <PackageReference Include="Bootsharp.Cloudflare.Razor" Version="*-*" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+    </ItemGroup>
+
+    <Import Project="../../../src/cs/Bootsharp.Cloudflare/Build/Bootsharp.Cloudflare.targets" />
+    <Import Project="../../../src/cs/Bootsharp.Cloudflare.AspNetCore/Build/Bootsharp.Cloudflare.AspNetCore.props" />
+
+</Project>
